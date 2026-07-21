@@ -149,11 +149,14 @@ describe('summary and export', () => {
 
     const html = app().innerHTML;
     ['How the Day Went', 'Average Temps by Session', 'Pressure Gain by Session',
-      'Rear Stagger', 'Size &amp; Stagger Detail', 'Driver Notes', 'Every Call &amp; Flag Raised Today']
+      'Rear Stagger', 'Size &amp; Stagger Detail', 'Day Averages by Corner',
+      'Driver Notes', 'Every Call &amp; Flag Raised Today']
       .forEach(section => expect(html).toContain(section));
     expect(html).toContain('class="sumtbl"');  // the summary is table-driven now
     expect(html).not.toContain('Track Temp Through the Day');  // track temp dropped
-    expect(html).not.toContain('Day Averages by Corner');      // folded into the per-session tables
+    // size & stagger detail leads, day averages second, ahead of the per-session tables
+    expect(html.indexOf('Size &amp; Stagger Detail')).toBeLessThan(html.indexOf('Day Averages by Corner'));
+    expect(html.indexOf('Day Averages by Corner')).toBeLessThan(html.indexOf('How the Day Went'));
     expect(html).toContain('Free on entry.');  // driver notes carried through
   });
 
