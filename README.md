@@ -115,8 +115,12 @@ days you make while testing publish to every phone, and deleting one here delete
 everywhere. Give the dev server its own log instead:
 
 ```bash
-VITE_TEAM_CODE=DEV1-2345 npm run dev
+VITE_TEAM_CODE=DEVX-2345 npm run dev
 ```
+
+The code alphabet drops `I`, `L`, `O`, `0` and `1` — `DEV1-2345` is *not* valid. A malformed
+value here is ignored with a console warning and the build falls back to the default shared log,
+rather than shipping a deployment that reports itself shared while nothing can ever sync.
 
 ## Deploying
 

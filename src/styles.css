@@ -38,9 +38,16 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
 /* ---------- save button ----------
    Loud when there is unsaved work, quiet once it is down. Readable at arm's
    length in direct sun, which is where this decision actually gets made. */
+/* The width is pinned on purpose. This label goes from "Saved · just now" to
+   "Save" the instant an edit commits, and the header group is right-aligned —
+   so a shrinking chip used to drag every control beside it ~79px sideways. That
+   happens on blur, which is exactly when a thumb is already coming down on the
+   button next to it: the tap landed on nothing and you pressed again. Reserve
+   the widest state and nothing moves. */
 .save-btn{font-family:var(--disp);font-weight:800;font-size:.78rem;letter-spacing:.12em;
   text-transform:uppercase;padding:8px 13px;border-radius:5px;border:1px solid var(--line2);
-  background:var(--panel2);color:var(--dim);transition:background .15s,color .15s,border-color .15s}
+  background:var(--panel2);color:var(--dim);transition:background .15s,color .15s,border-color .15s;
+  min-width:9.4rem}
 .save-btn .sb-dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:0 0 auto;opacity:.85}
 .save-btn.clean{color:var(--good);border-color:#2c4a36}
 .save-btn.dirty{color:#111;background:var(--chalk);border-color:var(--chalk);
@@ -54,7 +61,7 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
   100%{box-shadow:0 0 0 0 rgba(255,212,71,0)}}
 @keyframes savespin{0%{opacity:.25}50%{opacity:1}100%{opacity:.25}}
 @media (prefers-reduced-motion: reduce){.save-btn.dirty{animation:none}}
-@media (max-width:420px){.save-btn{padding:8px 10px;letter-spacing:.08em}}
+@media (max-width:420px){.save-btn{padding:8px 10px;letter-spacing:.08em;min-width:8.4rem}}
 .crumb{font-family:var(--disp);font-weight:700;font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;
   color:var(--dim)}
 .crumb b{color:var(--text)}

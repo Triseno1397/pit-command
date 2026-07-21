@@ -27,7 +27,7 @@ import { backupsHTML } from './ui/backups.js';
 import { crewHTML } from './ui/crew.js';
 import { deleteDayHTML } from './ui/day.js';
 import {
-  crew, loadCrew, joinCrew, leaveCrew, rejoinShared, syncNow,
+  crew, loadCrew, joinCrew, leaveCrew, rejoinShared, syncNow, resendEverything,
   startAutoSync, makeCode, validCode, onSync
 } from './sync.js';
 import { checkDevKey, saveDevKey } from './devkey.js';
@@ -243,6 +243,16 @@ window.crewSync = async () => {
   const ok = await syncNow();
   repaintCrew();
   toast(ok ? 'Synced.' : (crew.error || 'Could not sync.'), !ok);
+};
+
+/** The recovery path when a phone's work never made it up — or made it up and
+ *  the log lost it. Re-stages this device's entire season and pushes it. */
+window.crewResend = async () => {
+  const r = await resendEverything();
+  repaintCrew();
+  if (r.ok) toast(`Sent this phone's whole log — ${r.staged} value${r.staged === 1 ? '' : 's'} pushed to the crew.`);
+  else if (r.offline) toast(`Staged ${r.staged} values. They go up as soon as there is signal.`);
+  else toast(r.error || 'Could not send.', true);
 };
 
 window.crewLeave = async () => {

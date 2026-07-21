@@ -9,7 +9,7 @@
    a season of work, and "which crew am I in" should never be something that
    happened by accident. */
 
-import { crew, pendingCount, makeCode, onSharedLog } from '../sync.js';
+import { crew, pendingCount, confirmedCount, makeCode, onSharedLog } from '../sync.js';
 import { esc } from './esc.js';
 
 function ago(ts) {
@@ -29,19 +29,29 @@ export function crewButtonLabel() {
   return 'Crew ' + crew.code;
 }
 
-/** One line the crew chief can read at a glance across a hot pit box. */
+/** One line the crew chief can read at a glance across a hot pit box.
+ *
+ *  It carries a count now. "Up to date" is not an answer to the only question
+ *  that matters — *is my sheet actually up there* — because a phone that has
+ *  never sent a single reading is also, technically, up to date. The number is
+ *  what separates those two, and zero is the one worth shouting about. */
 export function crewStatusLine() {
   if (!crew.code) return 'Saved on this phone only — other phones will not see these days.';
-  const pend = pendingCount();
   const where = onSharedLog() ? 'Shared with every phone' : 'Shared with crew ' + crew.code;
   /* "Not configured" is a different animal from "no signal" and has to read that
      way: one clears when a bar of service shows up, the other never will. */
   if (crew.unconfigured) return 'Not syncing — sharing is not set up on the server yet.';
-  if (pend) return `${where} · ${pend} change${pend === 1 ? '' : 's'} waiting for signal`;
+
+  const pend = pendingCount();
+  const up = confirmedCount();
+  const held = `${up} value${up === 1 ? '' : 's'} on the crew log`;
+
+  if (pend) return `${where} · ${held} · ${pend} waiting for signal`;
   if (crew.error) return `${where} · ${crew.error}`;
   if (crew.syncing) return where + ' · syncing…';
   if (!crew.lastSyncAt) return where + ' · not synced yet';
-  return `${where} · up to date ${ago(crew.lastSyncAt)}`;
+  if (!up) return `${where} · nothing from this phone is on the crew log yet`;
+  return `${where} · ${held} · confirmed ${ago(crew.lastSyncAt)}`;
 }
 
 export function crewHTML() {
@@ -79,9 +89,14 @@ export function crewHTML() {
 
     <div class="crew-row">
       <button class="mini-btn" onclick="crewSync()">Sync now</button>
+      <button class="mini-btn" onclick="crewResend()">Send everything</button>
       ${shared ? '' : `<button class="mini-btn" onclick="crewShared()">Back to shared</button>`}
       <button class="mini-btn danger" onclick="crewLeave()">Stop sharing</button>
     </div>
+    <p class="sum-note"><b>Sync now</b> sends what changed since last time. <b>Send everything</b>
+      re-uploads this phone's whole season from scratch — use it if the count above looks too low,
+      or if a day you logged here is missing on someone else's phone. It cannot overwrite newer
+      work from another phone, and it never deletes anything.</p>
     <p class="sum-note">Stopping keeps everything currently on this phone — it only stops the sharing.
       The log stays put for everyone else.</p>
 

@@ -33,8 +33,29 @@ const CREW_KEY = 'lltool:crew:v1';
    remembered so this default never quietly overrides them.
 
    Set VITE_TEAM_CODE at build time to give a deployment its own shared log. */
-export const SHARED_CODE =
-  String((import.meta.env && import.meta.env.VITE_TEAM_CODE) || 'TEAM-BASE').toUpperCase();
+/* Crockford-ish: no I, L, O, 0, 1 — these get read aloud across a loud pit box
+   and written on tape. 8 symbols from a 32-char alphabet is ~40 bits, which is
+   not brute-forceable against a rate-limited endpoint. Declared up here because
+   the shared-code check below needs the pattern. */
+const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const CODE_RE = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
+
+const FALLBACK_CODE = 'TEAM-BASE';
+const CONFIGURED_CODE =
+  String((import.meta.env && import.meta.env.VITE_TEAM_CODE) || FALLBACK_CODE).toUpperCase();
+
+/* A build-time typo here used to be invisible and permanent: the server rejects
+   a malformed code with "Bad crew code", but the app still said "Shared with
+   every phone", so every device on that deployment reported itself shared while
+   nothing ever synced. The alphabet drops I, L, O, 0 and 1, which is exactly the
+   sort of thing a hand-typed code gets wrong. Fall back to the default rather
+   than ship a deployment that can never sync. */
+export const SHARED_CODE = CODE_RE.test(CONFIGURED_CODE) ? CONFIGURED_CODE : FALLBACK_CODE;
+export const sharedCodeRejected = CONFIGURED_CODE !== SHARED_CODE ? CONFIGURED_CODE : null;
+if (sharedCodeRejected && typeof console !== 'undefined') {
+  console.warn(`[pit-command] VITE_TEAM_CODE "${sharedCodeRejected}" is not a valid crew code ` +
+    `(letters A-Z and digits 2-9 only, no I/L/O/0/1, as ABCD-2345). Using ${FALLBACK_CODE}.`);
+}
 
 const DAY_FIELDS = ['name', 'track', 'dateISO', 'date', 'driver', 'car', 'carClass', 'notes'];
 const SESS_FIELDS = ['type', 'name', 'notes'];
@@ -43,12 +64,6 @@ const TIRE_FIELDS = ['psi', 'size', 'ti', 'tm', 'to'];
    every one of them is a map key on every session on every sync, and `tt` is
    already in the wild — renaming it would orphan every phone's merge state. */
 const READING_FIELDS = { tt: 'trackTemp', life: 'tireLife', laps: 'laps', chg: 'changes' };
-
-/* Crockford-ish: no I, L, O, 0, 1 — these get read aloud across a loud pit box
-   and written on tape. 8 symbols from a 32-char alphabet is ~40 bits, which is
-   not brute-forceable against a rate-limited endpoint. */
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const CODE_RE = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
 export const crew = {
   code: null,          // null = solo, this device only
@@ -305,9 +320,51 @@ export async function syncNow({ silent = false } = {}) {
 
 export function pendingCount() { return Object.keys(crew.outbox).length }
 
+/** How many live values this phone believes the crew log is holding for it.
+ *  Tombstones and blank boxes are not work, so they do not count — the number is
+ *  meant to answer "is my sheet up there", and counting empties would inflate it
+ *  into meaninglessness. */
+export function confirmedCount() {
+  let n = 0;
+  for (const p in crew.known) {
+    if (p in crew.outbox) continue;                 // not acknowledged yet
+    const v = crew.known[p].v;
+    if (v === null || v === '') continue;
+    n++;
+  }
+  return n;
+}
+
+/** Everything on this phone, staged again from scratch and pushed.
+ *
+ *  `collectLocalChanges()` only ever sends the difference against `known` — this
+ *  phone's private record of what it has already sent. Nothing re-verifies that
+ *  record against the server, so if the crew log loses its copy (store replaced,
+ *  key expired, a crew code reused) every phone goes on believing it already
+ *  sent everything and the log stays empty forever, with no error anywhere.
+ *
+ *  Clearing `known` is what makes that recoverable: the next collect sees the
+ *  whole season as new and stages all of it. Re-sending costs nothing — the merge
+ *  is per-path last-write-wins, so a value that is already up there lands on
+ *  itself. It cannot clobber a newer edit from another phone either, because the
+ *  timestamps travel with the ops and the server keeps the newer one. */
+export async function resendEverything() {
+  if (!crew.code) return { ok: false, error: 'This phone is not on a shared log.' };
+  crew.known = {};
+  crew.outbox = {};
+  const staged = collectLocalChanges();
+  await persist();
+  notify();
+  const ok = await syncNow();
+  return ok
+    ? { ok: true, staged }
+    : { ok: false, staged, error: crew.error || 'Could not reach the crew log.', offline: true };
+}
+
 /* ---------- not stealing the keyboard ---------- */
 
 let pendingRepaint = false;
+let pointerDown = false;
 
 /** True while a crew member has a field open. Remote data still lands in state
  *  and on disk during this; only the repaint waits. */
@@ -319,12 +376,23 @@ export function isEditing() {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable === true;
 }
 
-/** Flush a repaint that was held back while someone was typing. */
+/** Flush a repaint that was held back while someone was typing.
+ *
+ *  The pointer check is not paranoia — it is the whole reason a tap used to go
+ *  nowhere. Tapping a button straight out of a field fires `focusout` *before*
+ *  the click: the held-back repaint would run right then, replace the DOM, and
+ *  the button being pressed would cease to exist before the click could land on
+ *  it. Nothing happened, and you tapped again. So while a finger is down, the
+ *  repaint keeps waiting; `pointerup` releases it, and the click that follows
+ *  reaches the element it was aimed at. */
 export function flushPendingRepaint() {
-  if (!pendingRepaint || isEditing()) return;
+  if (!pendingRepaint || isEditing() || pointerDown) return;
   pendingRepaint = false;
   hooks.render();
 }
+
+/** Exposed for the regression test — a jsdom pointer event is not a real one. */
+export function setPointerDown(v) { pointerDown = !!v }
 
 /* ---------- joining, leaving, persistence ---------- */
 
@@ -430,6 +498,16 @@ export function startAutoSync() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') syncNow();
   });
+  /* A tap must outlive the repaint it triggers. `focusout` lands between
+     pointerdown and click, so the repaint waits for the finger to come up —
+     otherwise it swaps out the button mid-press and the tap goes nowhere. */
+  document.addEventListener('pointerdown', () => { pointerDown = true }, true);
+  document.addEventListener('pointercancel', () => { pointerDown = false }, true);
+  document.addEventListener('pointerup', () => {
+    pointerDown = false;
+    setTimeout(flushPendingRepaint, 0);   // after the click this pointerup produces
+  }, true);
+
   // Someone finished a field — safe to show whatever arrived while they typed.
   document.addEventListener('focusout', () => setTimeout(flushPendingRepaint, 0));
   setInterval(() => { flushPendingRepaint(); syncNow({ silent: true }) }, 20000);

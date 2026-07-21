@@ -116,6 +116,170 @@ describe('per-field merge', () => {
   });
 });
 
+/* The failure this exists for: `known` is this phone's private record of what it
+   has already sent, and nothing ever re-checks it against the server. If the crew
+   log loses its copy, every phone goes on believing it is done and the log stays
+   empty forever — no error, no retry, nothing to notice. */
+describe('getting a phone’s work back onto a log that lost it', () => {
+  it('counts only real values as confirmed, not blanks or tombstones', () => {
+    const { s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    s.pre.changes = 'Wedge out';
+    sync.collectLocalChanges(1000);
+
+    // everything is still in the outbox — nothing is confirmed until it lands
+    expect(sync.confirmedCount()).toBe(0);
+
+    Object.keys(sync.crew.outbox).forEach(k => delete sync.crew.outbox[k]);   // synced
+    const n = sync.confirmedCount();
+    expect(n).toBeGreaterThan(0);
+    // the log flattens every empty box too; those are not work and must not inflate it
+    expect(n).toBeLessThan(Object.keys(sync.crew.known).length);
+  });
+
+  it('re-stages the whole season when the log has lost it', async () => {
+    const { day, s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    sync.collectLocalChanges(1000);
+    Object.keys(sync.crew.outbox).forEach(k => delete sync.crew.outbox[k]);
+
+    // this phone now believes it has sent everything...
+    expect(sync.collectLocalChanges(2000)).toBe(0);
+    // ...so an emptied crew log would never be repaired by an ordinary sync.
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ ok: true, cursor: 9, ops: [] })
+    });
+    const r = await sync.resendEverything();
+
+    expect(r.ok).toBe(true);
+    expect(r.staged).toBeGreaterThan(0);
+    const sent = JSON.parse(global.fetch.mock.calls[0][1].body).ops.map(o => o.p);
+    expect(sent).toContain(`d:${day.id}:!`);
+    expect(sent).toContain(`r:${s.id}:post:RF:psi`);
+  });
+
+  it('keeps the work staged when there is no signal, rather than reporting success', async () => {
+    const { s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+
+    const r = await sync.resendEverything();
+    expect(r.ok).toBe(false);
+    expect(r.offline).toBe(true);
+    expect(sync.pendingCount()).toBeGreaterThan(0);   // still owed, will go up later
+  });
+
+  it('refuses on a phone that deliberately works alone', async () => {
+    await sync.leaveCrew();
+    const r = await sync.resendEverything();
+    expect(r.ok).toBe(false);
+    expect(sync.crew.code).toBeNull();               // and does not quietly re-join
+  });
+});
+
+/* The repaint that ate your tap. Remote data arriving while someone types is
+   held back so it does not destroy the field under their hands — but the release
+   used to be `focusout`, which fires *between* pointerdown and click. Tapping a
+   button straight out of a field replaced the DOM mid-press and the click landed
+   on nothing. You tapped again and it worked, which is the worst kind of bug:
+   intermittent, invisible, and only under sharing. */
+describe('a tap out of a field still reaches the button', () => {
+  it('holds the repaint while a finger is down, and releases it after', async () => {
+    const { hooks } = await import('../src/hooks.js');
+    let painted = 0;
+    hooks.render = () => { painted++ };
+
+    // someone is typing when the crew's work arrives
+    const ta = document.createElement('textarea');
+    document.body.appendChild(ta);
+    ta.focus();
+    expect(sync.isEditing()).toBe(true);
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ ok: true, cursor: 7, ops: [{ p: 'd:dTap:!', v: 1, t: 5000 }] })
+    });
+    await sync.syncNow();
+    expect(painted).toBe(0);          // held back — repainting now destroys the field
+
+    // the tap begins: focus leaves the field, but the finger is still down
+    sync.setPointerDown(true);
+    ta.blur();
+    sync.flushPendingRepaint();
+    expect(painted).toBe(0);          // the button must survive to receive the click
+
+    // finger up — now it is safe
+    sync.setPointerDown(false);
+    sync.flushPendingRepaint();
+    expect(painted).toBe(1);
+
+    ta.remove();
+  });
+});
+
+/* A build-time typo in VITE_TEAM_CODE used to be invisible and permanent: the
+   server rejects a malformed code, but the app still said "Shared with every
+   phone" while nothing ever synced. */
+describe('a deployment cannot ship an unusable shared code', () => {
+  it('only ever exposes a code the server would accept', () => {
+    expect(sync.validCode(sync.SHARED_CODE)).toBe(true);
+  });
+
+  it('falls back rather than stranding every phone on the deployment', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_TEAM_CODE', 'DEV1-2345');       // `1` is not in the alphabet
+    const s2 = await import('../src/sync.js');
+    expect(s2.SHARED_CODE).toBe('TEAM-BASE');
+    expect(s2.sharedCodeRejected).toBe('DEV1-2345');  // and it says so, loudly
+    vi.unstubAllEnvs();
+    await fresh();
+  });
+
+  it('honours a well-formed one', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_TEAM_CODE', 'devx-2345');       // case is normalised
+    const s2 = await import('../src/sync.js');
+    expect(s2.SHARED_CODE).toBe('DEVX-2345');
+    expect(s2.sharedCodeRejected).toBeNull();
+    vi.unstubAllEnvs();
+    await fresh();
+  });
+});
+
+/* "Up to date" was never an answer to the only question that matters. A phone
+   that has never sent a reading is also up to date. */
+describe('the status line answers “is my sheet actually up there”', () => {
+  const line = async () => (await import('../src/ui/crew.js')).crewStatusLine();
+
+  it('says so plainly when nothing from this phone has landed', async () => {
+    seed();
+    sync.crew.lastSyncAt = Date.now();
+    sync.crew.known = {}; sync.crew.outbox = {};
+    expect(await line()).toContain('nothing from this phone is on the crew log yet');
+  });
+
+  it('reports the count once work has landed', async () => {
+    const { s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    sync.collectLocalChanges(1000);
+    Object.keys(sync.crew.outbox).forEach(k => delete sync.crew.outbox[k]);
+    sync.crew.lastSyncAt = Date.now();
+
+    const txt = await line();
+    expect(txt).toMatch(/\d+ values on the crew log/);
+    expect(txt).toContain('confirmed');
+    expect(txt).not.toContain('nothing from this phone');
+  });
+
+  it('still leads with unsent work when there is a backlog', async () => {
+    const { s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    sync.collectLocalChanges(1000);
+    expect(await line()).toContain('waiting for signal');
+  });
+});
+
 describe('creation and deletion', () => {
   it('materialises a day and session that only exist on another phone', () => {
     sync.applyOp({ p: 'd:d9000:!', v: 1, t: 1 });
