@@ -1,11 +1,10 @@
 import { TIRES, TIRE_COLORS, num, f1, f2 } from '../num.js';
 import { analyze } from '../analyze.js';
-import { lineChart, cellNum } from './chart.js';
+import { cellNum } from './chart.js';
 import { esc } from './esc.js';
 
 export function summaryHTML(d) {
   const S = d.sessions;
-  const labels = S.map((s, i) => 'S' + (i + 1));
   const AA = S.map(s => analyze(s, d));
   const who = [d.car ? '#' + d.car : '', d.driver].filter(Boolean).join(' ');
   const meta = [esc(d.track) || 'no track', who ? esc(who) : '', esc(d.carClass), esc(d.date), 'full-day readout']
@@ -29,48 +28,43 @@ export function summaryHTML(d) {
   });
   h += `</div><div class="sum-note">Blue = tight, red = loose, green = balanced. Read left to right and you can see whether your changes walked the car toward the window as the track changed.</div></div>`;
 
-  /* avg tire temps chart */
-  h += `<div class="sum-sec"><h3>Average Tire Temps by Session</h3>` +
-    lineChart(TIRES.map(k => ({ name: k, color: TIRE_COLORS[k], vals: AA.map(A => A.temps[k]) })), labels, '°F') +
-    `<div class="sum-note">Hotter tires are the ones doing the work. Watch which line climbs session over session — that corner is carrying the car.</div></div>`;
+  /* Per-session tables. These were hand-rolled line charts; a crew chief reading
+     a phone in the pits wants the number in a row, not a trend line to eyeball.
+     Sessions run down the page so a full day scrolls instead of crowding the width. */
+  const cornerHead = TIRES.map(k => `<th style="color:${TIRE_COLORS[k]}">${k}</th>`).join('');
 
-  /* pressure gains chart */
-  h += `<div class="sum-sec"><h3>Pressure Gain by Session (hot − cold)</h3>` +
-    lineChart(TIRES.map(k => ({ name: k, color: TIRE_COLORS[k], vals: AA.map(A => A.gains[k]) })), labels, 'psi') +
-    `<div class="sum-note">Typical asphalt build is roughly 3–7 psi. A line above the pack is an overworked corner; a flat line near zero isn’t coming up to temp; below zero is a leak.</div></div>`;
-
-  /* stagger chart */
-  h += `<div class="sum-sec"><h3>Rear Stagger — Cold vs Hot</h3>` +
-    lineChart([
-      { name: 'Cold (before)', color: '#4C8DFF', vals: AA.map(A => A.stagColdRear) },
-      { name: 'Hot (after)', color: '#F0524F', vals: AA.map(A => A.stagHotRear) }], labels, 'in') +
-    `<div class="sum-note">The gap between the lines is heat growth. Set your cold stagger so the HOT line lands on your target for the Main — that’s the number the car actually races on.</div></div>`;
-
-  /* track temp chart */
-  h += `<div class="sum-sec"><h3>Track Temp Through the Day</h3>` +
-    lineChart([{
-      name: 'Track °F', color: '#FFD447',
-      vals: S.map(s => num(s.post.trackTemp) ?? num(s.pre.trackTemp))
-    }], labels, '°F') +
-    `<div class="sum-note">Rule of thumb: trim ~0.5–1 psi cold for every 10–15°F the track comes up, and expect grip to fall off as it heats.</div></div>`;
-
-  /* per-tire day averages */
-  const avgOf = arr => { const a = arr.filter(v => v != null); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null };
-  h += `<div class="sum-sec"><h3>Day Averages by Corner</h3><div class="tblscroll"><table class="sumtbl">
-    <tr><th>Tire</th><th>Avg Hot Temp</th><th>Avg Cold psi</th><th>Avg Hot psi</th><th>Avg Gain</th><th>Avg Size Growth</th></tr>`;
-  TIRES.forEach(k => {
-    const temps = avgOf(AA.map(A => A.temps[k]));
-    const cold = avgOf(S.map(s => num(s.pre.tires[k].psi)));
-    const hot = avgOf(S.map(s => num(s.post.tires[k].psi)));
-    const gain = avgOf(AA.map(A => A.gains[k]));
-    const grow = avgOf(AA.map(A => A.growth[k]));
-    h += `<tr><td style="color:${TIRE_COLORS[k]}">${k}</td>
-      <td>${temps != null ? f1(temps) + '°F' : '—'}</td>
-      <td>${cold != null ? f1(cold) : '—'}</td>
-      <td>${hot != null ? f1(hot) : '—'}</td>
-      ${cellNum(gain, ' psi', true)}${cellNum(grow, '"', true)}</tr>`;
+  /* average temps by session — each session's average temp on each corner */
+  h += `<div class="sum-sec"><h3>Average Temps by Session</h3><div class="tblscroll"><table class="sumtbl">
+    <tr><th>Session</th>${cornerHead}</tr>`;
+  S.forEach((s, i) => {
+    h += `<tr><td>${esc(s.name)}</td>${TIRES.map(k => {
+      const t = AA[i].temps[k]; return `<td>${t != null ? f1(t) + '°' : '—'}</td>`;
+    }).join('')}</tr>`;
   });
-  h += `</table></div><div class="sum-note">Gain and growth are hot minus cold, averaged across every session with both readings.</div></div>`;
+  h += `</table></div><div class="sum-note">Hotter tires are the ones doing the work. Read a corner down the day and you can see which one is carrying the car as the track changes.</div></div>`;
+
+  /* pressure gain by session (hot − cold) */
+  h += `<div class="sum-sec"><h3>Pressure Gain by Session</h3><div class="tblscroll"><table class="sumtbl">
+    <tr><th>Session</th>${cornerHead}</tr>`;
+  S.forEach((s, i) => {
+    h += `<tr><td>${esc(s.name)}</td>${TIRES.map(k => cellNum(AA[i].gains[k], '', true)).join('')}</tr>`;
+  });
+  h += `</table></div><div class="sum-note">Hot minus cold, in psi. Typical asphalt build is roughly 3–7. A number above the pack is an overworked corner; near zero isn’t coming up to temp; below zero is a leak.</div></div>`;
+
+  /* rear stagger — cold vs hot, per session */
+  h += `<div class="sum-sec"><h3>Rear Stagger — Cold vs Hot</h3><div class="tblscroll"><table class="sumtbl">
+    <tr><th>Session</th><th>Cold</th><th>Hot</th><th>Change</th></tr>`;
+  S.forEach((s, i) => {
+    const A = AA[i];
+    const moved = (A.stagColdRear != null && A.stagHotRear != null) ? A.stagHotRear - A.stagColdRear : null;
+    h += `<tr><td>${esc(s.name)}</td>
+      <td>${A.stagColdRear != null ? f2(A.stagColdRear) + '"' : '—'}</td>
+      <td>${A.stagHotRear != null ? f2(A.stagHotRear) + '"' : '—'}</td>
+      ${cellNum(moved, '"', true)}</tr>`;
+  });
+  h += `</table></div><div class="sum-note">The gap between cold and hot is heat growth. Set your cold stagger so the HOT number lands on your target for the Main — that’s the one the car actually races on.</div></div>`;
+
+  const avgOf = arr => { const a = arr.filter(v => v != null); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null };
 
   /* size & stagger — same by-corner shape as the day averages above, and
      deliberately sizes only: pressures and temps have their own table and

@@ -1,4 +1,4 @@
-import { TIRES, f1, tempColor } from '../num.js';
+import { TIRES, f1, f2, tempColor } from '../num.js';
 import { analyze } from '../analyze.js';
 import { esc } from './esc.js';
 
@@ -16,6 +16,7 @@ export function analysisHTML(s, d) {
       <text x="${x + 26}" y="${y + 44}" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="13" fill="#0D1014">${A.temps[k] != null ? Math.round(A.temps[k]) + '°' : '—'}</text>
       <text x="${x + 26}" y="${y + 63}" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" fill="#0D1014">${g != null ? (g > 0 ? '+' : '') + f1(g) + ' psi' : ''}</text></g>`
   };
+  const stagTxt = v => v == null ? '—' : f2(v) + '"';
   const pos = A.balance == null ? 50 : 50 - A.balance * 45;
   let callColor = 'var(--dim)';
   if (A.balLabel.includes('TIGHT')) callColor = 'var(--tight)';
@@ -25,11 +26,13 @@ export function analysisHTML(s, d) {
     <div class="anal-hd">Crew Chief Readout</div>
     <div class="anal-grid">
       <div class="car-wrap">
-        <svg viewBox="0 0 220 300" role="img" aria-label="Four corner tire heat map, nose up">
+        <svg viewBox="0 0 220 300" role="img" aria-label="Four corner tire heat map with hot stagger, front at top">
           <path d="M78 30 Q110 8 142 30 L152 60 L152 240 Q152 268 110 274 Q68 268 68 240 L68 60 Z"
             fill="#232A34" stroke="#39424f" stroke-width="1.5"/>
-          <rect x="80" y="70" width="60" height="34" rx="4" fill="#161B22" stroke="#39424f"/>
-          <text x="110" y="91" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="12" fill="#8A94A3" letter-spacing="2">NOSE</text>
+          <text x="110" y="82" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="8" fill="#8A94A3" letter-spacing="0.5">FRONT STAGGER HOT</text>
+          <text x="110" y="99" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="14" fill="#E8ECF1">${stagTxt(A.stagHotFront)}</text>
+          <text x="110" y="214" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="8" fill="#8A94A3" letter-spacing="0.5">REAR STAGGER HOT</text>
+          <text x="110" y="231" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="14" fill="#E8ECF1">${stagTxt(A.stagHotRear)}</text>
           <path d="M40 150 q-14 8 0 16" stroke="#FFD447" stroke-width="2.5" fill="none"/>
           <path d="M40 150 l-6 2 4 5z" fill="#FFD447"/>
           ${tireSVG('LF', 8, 52)}${tireSVG('RF', 160, 52)}${tireSVG('LR', 8, 182)}${tireSVG('RR', 160, 182)}

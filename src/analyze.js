@@ -51,9 +51,17 @@ export function analyze(sess, day) {
   const lAvg = (A.temps.LF != null && A.temps.LR != null) ? (A.temps.LF + A.temps.LR) / 2 : null;
   const rtAvg = (A.temps.RF != null && A.temps.RR != null) ? (A.temps.RF + A.temps.RR) / 2 : null;
   if (lAvg != null && rtAvg != null) {
-    const d = rtAvg - lAvg; met('R / L Split', (d > 0 ? '+' : '') + f1(d) + '°F', 'right side loading');
+    const d = rtAvg - lAvg;
     if (d < 5) push('info', 'Right side isn’t loading',
       'On a left-turn oval the right side should run clearly hotter. If the split is this small, the car may be under-driven this session, the track is green, or weight transfer is being wasted. Watch it next run.');
+  }
+
+  /* Cross (diagonal) temp split — the RF/LR diagonal averaged against the LF/RR
+     diagonal, RF/LR the dominant input. Positive means that diagonal is carrying
+     the heat, the way cross weight shows up in the tires. */
+  if (A.temps.RF != null && A.temps.LR != null && A.temps.LF != null && A.temps.RR != null) {
+    const cross = (A.temps.RF + A.temps.LR) / 2 - (A.temps.LF + A.temps.RR) / 2;
+    met('Cross Split', (cross > 0 ? '+' : '') + f1(cross) + '°F', 'RF+LR avg − LF+RR avg');
   }
 
   TIRES.forEach(k => {
@@ -97,10 +105,16 @@ export function analyze(sess, day) {
   const sc = stag(pre), sh = stag(post);
   A.stagColdRear = sc.rear; A.stagHotRear = sh.rear;
   A.stagColdFront = sc.front; A.stagHotFront = sh.front;
-  if (sc.rear != null) met('Rear Stagger (cold)', f2(sc.rear) + '"', 'RR − LR circumference');
-  if (sh.rear != null) met('Rear Stagger (hot)', f2(sh.rear) + '"', 'after the run');
-  if (sc.front != null) met('Front Stagger (cold)', f2(sc.front) + '"', 'RF − LF');
-  if (sh.front != null) met('Front Stagger (hot)', f2(sh.front) + '"', 'RF − LF, after the run');
+  /* Hot pressures fill the four boxes that used to carry stagger. The stagger
+     numbers moved onto the car diagram; hot psi is what a chief reaches for to
+     set the next cold start. */
+  TIRES.forEach(k => {
+    const hp = num(post.tires[k].psi);
+    if (hp != null) {
+      const g = A.gains[k];
+      met(k + ' psi (hot)', f1(hp), g != null ? (g > 0 ? '+' : '') + f1(g) + ' from cold' : 'after the run');
+    }
+  });
   if (sc.rear != null && sh.rear != null) {
     const d = sh.rear - sc.rear;
     if (Math.abs(d) >= 0.5) push('info', 'Stagger moved ' + (d > 0 ? '+' : '') + f2(d) + '" hot',

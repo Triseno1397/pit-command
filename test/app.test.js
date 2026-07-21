@@ -92,9 +92,11 @@ describe('a race day, start to finish', () => {
     expect(anal).toContain('Car is tight (push)');
     expect(anal).toContain('RF LOST pressure');
     expect(anal).toContain('valve stem, bead seal, or puncture');
-    // rear stagger read straight off the fractional sizes
-    expect(anal).toContain('Rear Stagger (cold)');
-    expect(anal).toContain('0.5"');
+    // hot pressures fill the metric boxes, the diagram carries hot stagger,
+    // and the diagonal cross split replaced the old right/left box
+    expect(anal).toContain('psi (hot)');
+    expect(anal).toContain('REAR STAGGER HOT');
+    expect(anal).toContain('Cross Split');
     // and the overview strip up top tracked it
     expect(document.getElementById('overview').innerHTML).toContain('TIGHT');
   });
@@ -146,11 +148,12 @@ describe('summary and export', () => {
     window.go({ page: 'summary', dayId });
 
     const html = app().innerHTML;
-    ['How the Day Went', 'Average Tire Temps by Session', 'Pressure Gain by Session',
-      'Rear Stagger', 'Track Temp Through the Day', 'Day Averages by Corner',
-      'Size &amp; Stagger Detail', 'Driver Notes', 'Every Call &amp; Flag Raised Today']
+    ['How the Day Went', 'Average Temps by Session', 'Pressure Gain by Session',
+      'Rear Stagger', 'Size &amp; Stagger Detail', 'Driver Notes', 'Every Call &amp; Flag Raised Today']
       .forEach(section => expect(html).toContain(section));
-    expect(html).toContain('<svg');            // hand-rolled charts rendered
+    expect(html).toContain('class="sumtbl"');  // the summary is table-driven now
+    expect(html).not.toContain('Track Temp Through the Day');  // track temp dropped
+    expect(html).not.toContain('Day Averages by Corner');      // folded into the per-session tables
     expect(html).toContain('Free on entry.');  // driver notes carried through
   });
 
@@ -825,7 +828,7 @@ describe('folding the session cards', () => {
 });
 
 describe('the crew chief readout', () => {
-  it('reads front stagger hot where the track temp tile used to be', () => {
+  it('reads front stagger hot on the car diagram, not a metric box', () => {
     window.addDay(); window.addSession('Practice');
     const sid = app().querySelector('.sess').id.replace('card-', '');
     window.updTT(sid, 'pre', '118');
@@ -836,7 +839,7 @@ describe('the crew chief readout', () => {
     window.updT(sid, 'post', 'RF', 'tm', '210');
 
     const anal = document.getElementById('anal-' + sid).innerHTML;
-    expect(anal).toContain('Front Stagger (hot)');
+    expect(anal).toContain('FRONT STAGGER HOT');
     expect(anal).toContain('0.75"');
     expect(anal).not.toContain('Track Temp');
   });
