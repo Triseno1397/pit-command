@@ -34,22 +34,32 @@ READING SPEECH
 - A speaker may work through corners in any order and may skip some.
 
 RULES
-- Never invent or infer a number that was not stated. Anything not clearly given is null.
+- Never invent or infer a number that was not stated. Omit anything not clearly given.
 - Do not carry a value from one corner to another.
-- If a number is ambiguous or you are not confident which field it belongs to, use null rather than guessing.
-- Return every corner and every field, using null for anything absent.`;
+- If a number is ambiguous or you are not confident which field it belongs to, omit it rather than guessing.
+- Return all four corners. Within a corner, include only the fields that were actually stated and leave the rest out — an empty corner is correct when nothing was said about it.`;
 
-const NUM_OR_NULL = { anyOf: [{ type: 'number' }, { type: 'null' }] };
+/* "No reading" is an ABSENT key, not an explicit null.
+
+   The obvious encoding — anyOf: [number, null] on every field — is rejected by
+   the API: 4 corners x 5 fields + trackTemp = 21 union-typed parameters, and
+   the structured-outputs compiler caps unions at 16 ("exponential compilation
+   cost"). Making the fields optional instead expresses the same thing with
+   zero unions, and costs nothing downstream: normalize() below runs every
+   field through clean(), which maps undefined to null exactly as it did an
+   explicit null. The corners stay required so the model always returns the
+   full four-corner shape. */
+const NUM = { type: 'number' };
 const TIRE = {
   type: 'object',
-  properties: { psi: NUM_OR_NULL, size: NUM_OR_NULL, ti: NUM_OR_NULL, tm: NUM_OR_NULL, to: NUM_OR_NULL },
-  required: ['psi', 'size', 'ti', 'tm', 'to'],
+  properties: { psi: NUM, size: NUM, ti: NUM, tm: NUM, to: NUM },
+  required: [],
   additionalProperties: false
 };
 export const SCHEMA = {
   type: 'object',
   properties: {
-    trackTemp: NUM_OR_NULL,
+    trackTemp: NUM,
     tires: {
       type: 'object',
       properties: { LF: TIRE, RF: TIRE, LR: TIRE, RR: TIRE },
@@ -57,7 +67,7 @@ export const SCHEMA = {
       additionalProperties: false
     }
   },
-  required: ['trackTemp', 'tires'],
+  required: ['tires'],
   additionalProperties: false
 };
 

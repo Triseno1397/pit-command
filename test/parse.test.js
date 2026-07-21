@@ -123,16 +123,28 @@ describe('model + schema contract', () => {
 
   it('locks the schema down so the model cannot return a surprise shape', () => {
     expect(SCHEMA.additionalProperties).toBe(false);
-    expect(SCHEMA.required).toEqual(['trackTemp', 'tires']);
+    expect(SCHEMA.required).toEqual(['tires']);
     expect(SCHEMA.properties.tires.required).toEqual(['LF', 'RF', 'LR', 'RR']);
     ['LF', 'RF', 'LR', 'RR'].forEach(k => {
       const t = SCHEMA.properties.tires.properties[k];
       expect(t.additionalProperties).toBe(false);
-      expect(t.required).toEqual(['psi', 'size', 'ti', 'tm', 'to']);
-      // every field must allow null — a blank box on the sheet is normal
-      Object.values(t.properties).forEach(p => {
-        expect(p.anyOf.map(x => x.type).sort()).toEqual(['null', 'number']);
-      });
+      expect(Object.keys(t.properties).sort()).toEqual(['psi', 'size', 'ti', 'tm', 'to']);
+      // Blank boxes are normal, so every field is optional — the model omits
+      // what wasn't stated and normalize() turns the gap back into null.
+      expect(t.required).toEqual([]);
     });
+  });
+
+  /* The whole schema must stay under the structured-outputs union cap (16
+     union-typed parameters). The original anyOf:[number,null] encoding sat at
+     21 and every request 400'd, which no mocked test could have caught. */
+  it('stays under the union-type limit that made every live call fail', () => {
+    let unions = 0;
+    (function walk(node) {
+      if (!node || typeof node !== 'object') return;
+      if (node.anyOf || Array.isArray(node.type)) unions++;
+      Object.values(node.properties || {}).forEach(walk);
+    })(SCHEMA);
+    expect(unions).toBeLessThanOrEqual(16);
   });
 });
