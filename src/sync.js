@@ -227,9 +227,15 @@ export async function syncNow({ silent = false } = {}) {
     });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body || !body.ok) {
+      /* 503 means the server has no store wired up at all — a different thing
+         from "no signal right now", and worth separating: one is waiting for a
+         bar of service, the other will never succeed no matter how long you
+         wait, so we must not let a crew look joined. */
+      crew.unconfigured = res.status === 503;
       crew.error = (body && body.error) || 'Sync failed.';
       return false;
     }
+    crew.unconfigured = false;
 
     // Ops we sent are accepted — drop them unless the field changed again while
     // the request was in flight.
@@ -334,8 +340,22 @@ export async function joinCrew(code) {
   collectLocalChanges();
   await persist();
   notify();
+
   const ok = await syncNow();
-  return ok ? { ok: true } : { ok: false, error: crew.error || 'Could not reach the crew.' };
+  if (ok) return { ok: true };
+
+  /* Offline is fine — you can join in the trailer and sync at the hotel, and
+     the outbox already holds this device's log. A server with no store is not
+     fine: that crew can never work, so roll it back rather than leave the crew
+     chief believing the rest of the phones will see their sheet. */
+  if (crew.unconfigured) {
+    const why = crew.error;
+    await leaveCrew();
+    crew.error = why;
+    notify();
+    return { ok: false, error: why, unconfigured: true };
+  }
+  return { ok: true, offline: true };
 }
 
 /** Leave. The log stays on this device untouched — leaving is not deleting. */

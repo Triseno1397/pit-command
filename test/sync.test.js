@@ -173,6 +173,42 @@ describe('working with no signal', () => {
   });
 });
 
+describe('joining when the server cannot help', () => {
+  it('keeps the crew when merely offline — you can join in the trailer', async () => {
+    seed();
+    global.fetch = vi.fn().mockRejectedValue(new Error('network'));
+    const r = await sync.joinCrew('ABCD-2345');
+    expect(r.ok).toBe(true);
+    expect(r.offline).toBe(true);
+    expect(sync.crew.code).toBe('ABCD-2345');
+    expect(sync.pendingCount()).toBeGreaterThan(0);   // the log is queued, not lost
+  });
+
+  it('rolls back when the server has no store, rather than faking a crew', async () => {
+    seed();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 503,
+      json: async () => ({ ok: false, error: 'Crew sync is not configured on the server.' })
+    });
+    const r = await sync.joinCrew('ABCD-2345');
+    expect(r.ok).toBe(false);
+    expect(r.unconfigured).toBe(true);
+    expect(sync.crew.code).toBeNull();                // never looks joined
+    expect(r.error).toMatch(/not configured/i);
+  });
+
+  it('leaves the local log completely intact either way', async () => {
+    const { s } = seed();
+    s.post.tires.RF.psi = '24.5';
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 503, json: async () => ({ ok: false, error: 'nope' })
+    });
+    await sync.joinCrew('ABCD-2345');
+    expect(state.state.days).toHaveLength(1);
+    expect(state.state.days[0].sessions[0].post.tires.RF.psi).toBe('24.5');
+  });
+});
+
 describe('crew codes', () => {
   it('generates codes in the shape the server accepts', () => {
     for (let i = 0; i < 40; i++) {

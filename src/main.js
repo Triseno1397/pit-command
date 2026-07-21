@@ -175,7 +175,8 @@ window.crewCreate = async () => {
   const code = makeCode();
   const r = await joinCrew(code);
   repaintCrew();
-  if (r.ok) toast('Crew ' + code + ' started. Read that code to the rest of the crew.');
+  if (r.ok && r.offline) toast('Crew ' + code + ' started. It will sync when there is signal.');
+  else if (r.ok) toast('Crew ' + code + ' started. Read that code to the rest of the crew.');
   else toast(r.error || 'Could not start the crew.', true);
 };
 
@@ -185,7 +186,8 @@ window.crewJoin = async () => {
   if (!validCode(raw)) { toast('That code should look like ABCD-2345.', true); return }
   const r = await joinCrew(raw);
   repaintCrew(); render();
-  if (r.ok) toast('Joined crew ' + raw + '.');
+  if (r.ok && r.offline) toast('Joined ' + raw + '. It will pull the crew log when there is signal.');
+  else if (r.ok) toast('Joined crew ' + raw + '.');
   else toast(r.error || 'Could not reach that crew.', true);
 };
 
