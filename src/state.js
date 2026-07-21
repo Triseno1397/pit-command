@@ -25,6 +25,12 @@ export let view = { page: 'hub' };
 
 /* transient UI state — deliberately not persisted */
 export const activeTab = {};
+/* Which session cards are open. A night can run eight sessions and each open card
+   is most of a screen, so a day arrives with only the newest run expanded and the
+   rest as one-line strips. Seeded per card on first render, then it is whatever
+   the crew last left it — not persisted, because "which card was open" is not
+   part of the log. */
+export const sessOpen = {};
 export const smartBusy = {};
 export const smartMsg = {};
 export const dictDraft = {};

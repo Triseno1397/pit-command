@@ -13,13 +13,13 @@ import '@fontsource/jetbrains-mono/latin-700.css';
 import './styles.css';
 
 import {
-  state, activeTab, dictDraft, blankReading,
+  state, activeTab, sessOpen, dictDraft, blankReading,
   newDay, newSession, curDay, findS, loadState, queueSave,
   setView, armDelete, disarmDelete, pendingDel, installLifecycleFlush,
   saveNow, restoreSnapshot, pushSnapshot, ensurePersistentStorage, isoToDisplay,
   canAddSession, limitReason
 } from './state.js';
-import { go, render, refreshSession, toast, startSaveTicker, openModal, closeModal } from './render.js';
+import { go, render, refreshSession, paintSessTools, toast, startSaveTicker, openModal, closeModal } from './render.js';
 import { hooks } from './hooks.js';
 import { smartPhoto, smartText, toggleDictate, stopDictate, clearDraft } from './smartfill.js';
 import { exportJSON, importJSON, exportCSV, exportAllCSV } from './exportimport.js';
@@ -93,11 +93,21 @@ function revealCard(selector) {
   }, 50);
 }
 
+/** Adding a run means the last one is done being keyed in. Fold everything else
+ *  so the sheet you are filling is the only sheet on screen — Expand All in the
+ *  strip above the cards puts the night back in one tap. */
+function openOnly(d, id) {
+  d.sessions.forEach(s => { sessOpen[s.id] = s.id === id });
+}
+
 window.addSession = t => {
   const d = curDay(); if (!d) return;
   // The bar already greys these out; this is the backstop for a stale screen.
   if (!canAddSession(d, t)) { toast(limitReason(t), true); return }
-  d.sessions.push(newSession(t, d)); queueSave(); render();
+  const s = newSession(t, d);
+  d.sessions.push(s);
+  openOnly(d, s.id);
+  queueSave(); render();
   revealCard('.sess:last-of-type');
 };
 
@@ -114,6 +124,7 @@ window.dupSession = id => {
   const at = d.sessions.findIndex(s => s.id === id);
   d.sessions.splice(at + 1, 0, copy);
   activeTab[copy.id] = 'pre';
+  openOnly(d, copy.id);
   queueSave(); render();
   revealCard('#card-' + copy.id);
 };
@@ -123,10 +134,43 @@ window.delSession = id => {
   if (pendingDel === id) {
     disarmDelete();
     d.sessions = d.sessions.filter(s => s.id !== id);
-    delete activeTab[id]; delete dictDraft[id];
+    delete activeTab[id]; delete dictDraft[id]; delete sessOpen[id];
     queueSave(); render(); return;
   }
   armDelete(id, render);
+};
+
+/* ---------- folding session cards ----------
+   Toggling is done to the DOM rather than through render(), because a full
+   re-render tears down every input on the page — collapsing card 2 must not cost
+   the half-typed reading in card 5. */
+
+window.toggleSess = id => {
+  sessOpen[id] = !sessOpen[id];
+  const card = document.getElementById('card-' + id);
+  if (!card) { render(); return }
+  card.classList.toggle('shut', !sessOpen[id]);
+  const tog = card.querySelector('.sess-tog');
+  if (tog) {
+    tog.setAttribute('aria-expanded', String(sessOpen[id]));
+    const name = (findS(id) || {}).name || 'session';
+    tog.setAttribute('aria-label', (sessOpen[id] ? 'Collapse ' : 'Expand ') + name);
+  }
+  paintSessTools();
+};
+
+/** The whole header strip folds the card — a chevron alone is a small target in
+ *  gloves. Anything you can actually operate (the name box, Duplicate, Remove)
+ *  keeps its own click. */
+window.sessHdTap = (e, id) => {
+  if (e && e.target && e.target.closest('input,textarea,select,button,a,label')) return;
+  window.toggleSess(id);
+};
+
+window.setAllSessions = open => {
+  const d = curDay(); if (!d) return;
+  d.sessions.forEach(s => { sessOpen[s.id] = !!open });
+  render();
 };
 
 window.setTab = (id, t) => { activeTab[id] = t; render() };
@@ -134,7 +178,7 @@ window.setTab = (id, t) => { activeTab[id] = t; render() };
 window.updS = (id, f, v) => {
   const s = findS(id); if (!s) return;
   if (f === 'type' && v !== s.type && !canAddSession(curDay(), v, id)) {
-    // render() puts the select back on the type the session actually is
+    // render() puts the card back on the type the session actually is
     toast(limitReason(v), true); render(); return;
   }
   s[f] = v; queueSave();

@@ -731,6 +731,99 @@ describe('what a race day can hold', () => {
   });
 });
 
+/* A night runs eight sessions and an open card is most of a screen. Folding is
+   what makes the whole day readable without scrolling past four tire sheets. */
+describe('folding the session cards', () => {
+  const cards = () => [...app().querySelectorAll('.sess')];
+  const shut = () => cards().map(c => c.classList.contains('shut'));
+
+  it('opens a day on the run being worked, with the rest folded', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    ['Practice', 'Practice', 'Practice'].forEach(t => window.addSession(t));
+    // arrive at the day fresh, with nothing folded by hand yet
+    S.state.days[0].sessions.forEach(s => { delete S.sessOpen[s.id] });
+    window.go({ page: 'day', dayId: S.state.days[0].id });
+    expect(shut()).toEqual([true, true, false]);
+  });
+
+  it('leaves the session header without a type picker', () => {
+    window.addDay();
+    window.addSession('Practice');
+    expect(app().querySelector('.sess-hd select')).toBeNull();
+  });
+
+  it('folds and unfolds a card without disturbing the others', () => {
+    window.addDay();
+    window.addSession('Practice');
+    window.addSession('Practice');
+    const [first, second] = cards().map(c => c.id.replace('card-', ''));
+
+    window.toggleSess(first);
+    expect(shut()).toEqual([false, false]);
+    window.toggleSess(second);
+    expect(shut()).toEqual([false, true]);
+    window.toggleSess(first);
+    expect(shut()).toEqual([true, true]);
+  });
+
+  it('keeps a folded card typeable — the readings are hidden, not thrown away', async () => {
+    const { findS } = await import('../src/state.js');
+    window.addDay();
+    window.addSession('Practice');
+    const sid = cards()[0].id.replace('card-', '');
+    window.updT(sid, 'pre', 'RF', 'psi', '24');
+    window.toggleSess(sid);
+
+    expect(cards()[0].classList.contains('shut')).toBe(true);
+    expect(document.getElementById('body-' + sid)).toBeTruthy();
+    expect(findS(sid).pre.tires.RF.psi).toBe('24');
+  });
+
+  it('says what the folded run did, and keeps saying it as the numbers change', () => {
+    window.addDay();
+    window.addSession('Practice');
+    const sid = cards()[0].id.replace('card-', '');
+    window.toggleSess(sid);
+    window.updTT(sid, 'pre', '118');
+
+    const glance = document.getElementById('glance-' + sid);
+    expect(glance.textContent).toContain('118');
+  });
+
+  it('shows the whole night at once, and puts it back', () => {
+    window.addDay();
+    ['Practice', 'Practice', 'Qualifying'].forEach(t => window.addSession(t));
+    const tools = () => document.getElementById('sessTools').textContent;
+    expect(tools()).toContain('3 sessions');
+    expect(tools()).toContain('Expand All');
+
+    window.setAllSessions(true);
+    expect(shut()).toEqual([false, false, false]);
+    expect(tools()).toContain('Collapse All');
+
+    window.setAllSessions(false);
+    expect(shut()).toEqual([true, true, true]);
+  });
+
+  it('leaves the fold controls off a day with one session', () => {
+    window.addDay();
+    window.addSession('Practice');
+    expect(document.getElementById('sessTools').textContent.trim()).toBe('');
+  });
+
+  it('opens the run you just added and folds the one you finished', () => {
+    window.addDay();
+    window.addSession('Practice');
+    const first = cards()[0].id.replace('card-', '');
+    window.setAllSessions(true);
+
+    window.addSession('Practice');
+    expect(shut()).toEqual([true, false]);
+    expect(document.getElementById('card-' + first).classList.contains('shut')).toBe(true);
+  });
+});
+
 describe('the crew chief readout', () => {
   it('reads front stagger hot where the track temp tile used to be', () => {
     window.addDay(); window.addSession('Practice');

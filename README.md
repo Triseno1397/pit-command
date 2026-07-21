@@ -179,8 +179,16 @@ there is no box there for the crew to see it in and correct.
 **What a race day can hold.** Practice runs all afternoon, qualifying happens once, and the
 night ends in one main or two. The add bar is built per day and greys out a type the day has
 already used up — a stray fifth "Main" is always a mis-tap, and it quietly skews every
-day-level average that follows it. Re-typing an existing card and duplicating one are held to
-the same limits.
+day-level average that follows it. A session's type is set by the button that created it;
+duplicating a card is held to the same limits.
+
+**Folding the cards.** A night runs eight sessions and an open card is most of a screen, so
+a day arrives with only the run being worked expanded and the rest as one-line strips —
+number, name, track temp, and what the car did. Adding or duplicating a run folds the others,
+since keying in a new sheet means the last one is finished; `Expand All` above the cards puts
+the whole night back. Folding is done to the DOM rather than through a re-render, so
+collapsing card 2 cannot cost a half-typed reading in card 5, and a folded card's readings are
+hidden, never dropped.
 
 **Storage.** `idb-keyval` under the key `lltool:state:v2`, same shape as before, with a
 debounced 700 ms autosave. On first load it also migrates a v1 single-event payload or a

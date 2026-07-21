@@ -129,17 +129,42 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
 .ov-chip .v{font-family:var(--mono);font-size:.82rem;margin-top:3px}
 .ov-chip .bal{font-family:var(--disp);font-weight:800;font-size:.95rem;letter-spacing:.05em;text-transform:uppercase}
 
+/* One line per run, so a whole night fits on a screen. Sessions the crew is not
+   working fold down to their header; the strip stays tall enough to hit in
+   gloves, and the numbers keep updating underneath whether it is open or not. */
+.sess-tools{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  font-family:var(--disp);font-weight:700;font-size:.72rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim)}
+.sess-tools .mini-btn{margin-left:auto}
+
 .sess{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:18px;overflow:hidden}
+.sess.shut{margin-bottom:8px}
 .sess-hd{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);
-  border-bottom:1px solid var(--line);flex-wrap:wrap}
+  border-bottom:1px solid var(--line);flex-wrap:wrap;cursor:pointer}
+.sess.shut .sess-hd{border-bottom:none}
+.sess-tog{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:4px;
+  background:var(--panel);color:var(--dim);display:flex;align-items:center;justify-content:center}
+.sess-tog::before{content:'▾';font-size:.7rem;line-height:1;transition:transform .12s ease}
+.sess.shut .sess-tog::before{transform:rotate(-90deg)}
+.sess-hd:hover .sess-tog{color:var(--text);border-color:var(--line2)}
 .sess-num{font-family:var(--mono);font-weight:700;font-size:.75rem;color:#111;background:var(--chalk);
   padding:3px 8px;border-radius:3px;letter-spacing:.04em}
 .sess-hd input.sname{background:transparent;border:none;border-bottom:1px dashed var(--line2);
   font-family:var(--disp);font-weight:700;font-size:1.15rem;letter-spacing:.04em;text-transform:uppercase;
   width:170px;padding:2px 0}
-.sess-hd select{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 8px;
-  font-family:var(--disp);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+/* The folded card's whole readout: how hot the track was, what the car did. */
+.sess-glance{display:none}
+.sess.shut .sess-glance{display:flex;align-items:baseline;gap:10px;margin-left:auto}
+.sess-glance .g-temp{font-family:var(--mono);font-size:.8rem;color:var(--dim)}
+.sess-glance .g-bal{font-family:var(--disp);font-weight:800;font-size:.9rem;letter-spacing:.05em;
+  text-transform:uppercase}
+/* Folded, the strip is for finding a run, not acting on one — Duplicate and
+   Remove come back with the card, where a mis-tap costs nothing. The name box
+   gives up its fixed width so the whole strip stays one line on a phone. */
+.sess.shut input.sname{flex:1 1 110px;width:auto;min-width:0}
 .sess-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.sess.shut .sess-actions{display:none}
+.sess.shut .sess-body{display:none}
 .del-btn{color:var(--dim);font-size:.75rem;font-family:var(--disp);font-weight:700;
   letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;border:1px solid var(--line);border-radius:4px}
 .del-btn:hover{color:var(--loose);border-color:var(--loose)}

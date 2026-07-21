@@ -1,7 +1,7 @@
 import { TIRE_NAMES, num, f1 } from '../num.js';
 import { analyze } from '../analyze.js';
 import {
-  activeTab, pendingDel, smartBusy, smartMsg, dictDraft,
+  activeTab, sessOpen, pendingDel, smartBusy, smartMsg, dictDraft,
   SESSION_TYPES, canAddSession, limitReason
 } from '../state.js';
 import { canSmartFill, speechSupported, isListening } from '../smartfill.js';
@@ -9,20 +9,34 @@ import { devKey, needsKey } from '../devkey.js';
 import { analysisHTML } from './analysis.js';
 import { esc } from './esc.js';
 
+function balColor(label) {
+  if (!label) return 'var(--dim)';
+  if (label.includes('TIGHT')) return 'var(--tight)';
+  if (label.includes('LOOSE')) return 'var(--loose)';
+  if (label === 'BALANCED') return 'var(--good)';
+  return 'var(--dim)';
+}
+
 export function overviewHTML(d) {
   let h = '';
   d.sessions.forEach((s, i) => {
     const A = analyze(s, d);
     const tt = num(s.post.trackTemp) ?? num(s.pre.trackTemp);
-    let balColor = 'var(--dim)';
-    if (A.balLabel.includes('TIGHT')) balColor = 'var(--tight)';
-    else if (A.balLabel.includes('LOOSE')) balColor = 'var(--loose)';
-    else if (A.balLabel === 'BALANCED') balColor = 'var(--good)';
     h += `<div class="ov-chip"><div class="t">${i + 1} · ${esc(s.name)}</div>
       <div class="v">${tt != null ? f1(tt) + '°F track' : 'no track temp'}</div>
-      <div class="bal" style="color:${balColor}">${A.balLabel || '—'}</div></div>`;
+      <div class="bal" style="color:${balColor(A.balLabel)}">${A.balLabel || '—'}</div></div>`;
   });
   return h;
+}
+
+/** What a shut card still has to say. Collapsed, a session is one strip in a list
+ *  of eight, so it carries the two things that tell the crew which run this was:
+ *  how hot the track was and what the car did on it. */
+export function glanceHTML(s, d) {
+  const A = analyze(s, d);
+  const tt = num(s.post.trackTemp) ?? num(s.pre.trackTemp);
+  return `<span class="g-temp">${tt != null ? f1(tt) + '°F' : '—'}</span>
+    <span class="g-bal" style="color:${balColor(A.balLabel)}">${A.balLabel || '—'}</span>`;
 }
 
 const CLASSES = ['Limited Late Model', 'Late Model', 'Super Late Model', 'Crate Late Model',
@@ -92,34 +106,53 @@ export function addBarHTML(d) {
   }).join('');
 }
 
+/* One line above the cards for the two questions a long day raises: how many runs
+   are on this sheet, and can I see them all at once. Only earns its space once
+   there is more than one session to fold. */
+export function sessToolsHTML(d) {
+  const n = d.sessions.length;
+  if (n < 2) return '';
+  const anyShut = d.sessions.some(s => !sessOpen[s.id]);
+  return `<div class="sess-tools">
+    <span>${n} sessions on this sheet</span>
+    <button class="mini-btn" onclick="setAllSessions(${anyShut})">${anyShut ? 'Expand All' : 'Collapse All'}</button>
+  </div>`;
+}
+
 export function dayHTML(d) {
   let h = dayDetailsHTML(d);
   h += `<div class="overview" id="overview">${overviewHTML(d)}</div>`;
   if (!d.sessions.length)
     h += `<div class="zero"><h2>Green track. No data yet.</h2>
       <p>Add your first session below. Log pressures, temps, and tire sizes before and after each run — or snap a photo of your tire sheet and let the console read it.</p></div>`;
+  h += `<div id="sessTools">${sessToolsHTML(d)}</div>`;
+  const last = d.sessions.length - 1;
   d.sessions.forEach((s, i) => {
     if (!activeTab[s.id]) activeTab[s.id] = 'pre';
+    // First sight of a card: the run being worked is the last one on the sheet.
+    if (sessOpen[s.id] === undefined) sessOpen[s.id] = i === last;
+    const open = sessOpen[s.id];
     const tab = activeTab[s.id];
-    h += `<div class="sess" id="card-${s.id}">
-      <div class="sess-hd">
+    h += `<div class="sess${open ? '' : ' shut'}" id="card-${s.id}">
+      <div class="sess-hd" onclick="sessHdTap(event,'${s.id}')">
+        <button class="sess-tog" aria-expanded="${open}" aria-controls="body-${s.id}"
+          aria-label="${open ? 'Collapse' : 'Expand'} ${esc(s.name)}" onclick="toggleSess('${s.id}')"></button>
         <span class="sess-num">S${i + 1}</span>
         <input class="sname" value="${esc(s.name)}" onchange="updS('${s.id}','name',this.value)">
-        <select onchange="updS('${s.id}','type',this.value)">
-          ${SESSION_TYPES.map(t => `<option ${s.type === t ? 'selected' : ''}
-            ${canAddSession(d, t, s.id) ? '' : 'disabled'}>${t}</option>`).join('')}
-        </select>
+        <span class="sess-glance" id="glance-${s.id}">${glanceHTML(s, d)}</span>
         <div class="sess-actions">
           <button class="del-btn" onclick="dupSession('${s.id}')">Duplicate</button>
           <button class="del-btn${pendingDel === s.id ? ' arm' : ''}" onclick="delSession('${s.id}')">${pendingDel === s.id ? 'Tap again to delete' : 'Remove'}</button>
         </div>
       </div>
-      <div class="rw-tabs">
-        <button class="${tab === 'pre' ? 'on' : ''}" onclick="setTab('${s.id}','pre')">Before · Cold</button>
-        <button class="${tab === 'post' ? 'on' : ''}" onclick="setTab('${s.id}','post')">After · Hot</button>
-      </div>
-      <div class="rw-body">${smartHTML(s, tab)}${readingHTML(s, tab)}${notesHTML(s)}</div>
-      <div class="anal-slot" id="anal-${s.id}">${analysisHTML(s, d)}</div></div>`;
+      <div class="sess-body" id="body-${s.id}">
+        <div class="rw-tabs">
+          <button class="${tab === 'pre' ? 'on' : ''}" onclick="setTab('${s.id}','pre')">Before · Cold</button>
+          <button class="${tab === 'post' ? 'on' : ''}" onclick="setTab('${s.id}','post')">After · Hot</button>
+        </div>
+        <div class="rw-body">${smartHTML(s, tab)}${readingHTML(s, tab)}${notesHTML(s)}</div>
+        <div class="anal-slot" id="anal-${s.id}">${analysisHTML(s, d)}</div>
+      </div></div>`;
   });
   return h;
 }

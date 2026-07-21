@@ -1,6 +1,6 @@
 import { state, view, setView, curDay, findS, disarmDelete, saveStatus, onStatus } from './state.js';
 import { hubHTML } from './ui/hub.js';
-import { dayHTML, overviewHTML, addBarHTML } from './ui/day.js';
+import { dayHTML, overviewHTML, addBarHTML, glanceHTML, sessToolsHTML } from './ui/day.js';
 import { summaryHTML } from './ui/summary.js';
 import { analysisHTML } from './ui/analysis.js';
 import { esc } from './ui/esc.js';
@@ -104,8 +104,18 @@ export function refreshSession(sid) {
   const s = findS(sid);
   const slot = document.getElementById('anal-' + sid);
   if (s && slot) slot.innerHTML = analysisHTML(s, d);
+  // A folded card reads its own summary strip, so that has to move with the numbers
+  const gl = document.getElementById('glance-' + sid);
+  if (s && gl) gl.innerHTML = glanceHTML(s, d);
   const ov = document.getElementById('overview');
   if (ov) ov.innerHTML = overviewHTML(d);
+}
+
+/** Expand All ↔ Collapse All, after folding a card by hand. */
+export function paintSessTools() {
+  const el = document.getElementById('sessTools');
+  const d = curDay();
+  if (el && d) el.innerHTML = sessToolsHTML(d);
 }
 
 /* ---------- modal ---------- */
