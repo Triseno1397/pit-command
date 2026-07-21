@@ -123,10 +123,16 @@ export default async function handler(req, res) {
     }
 
     /* Everything changed since the caller's cursor. `since` of 0 is a first
-       sync and pulls the whole crew log. */
-    const paths = await redis(['ZRANGEBYSCORE', kLog, '(' + since, '+inf']);
+       sync and pulls the whole crew log. Scores come back too — they are what
+       the caller's next cursor is built from. */
+    const rows = await redis(['ZRANGEBYSCORE', kLog, '(' + since, '+inf', 'WITHSCORES']);
+    const paths = [], scores = [];
+    for (let i = 0; Array.isArray(rows) && i < rows.length; i += 2) {
+      paths.push(rows[i]); scores.push(Number(rows[i + 1]));
+    }
+
     let out = [];
-    if (Array.isArray(paths) && paths.length) {
+    if (paths.length) {
       const vals = await redis(['HMGET', kVal, ...paths]);
       out = paths.map((p, i) => {
         const rec = vals && vals[i] ? safeJson(vals[i]) : null;
@@ -134,8 +140,7 @@ export default async function handler(req, res) {
       }).filter(Boolean);
     }
 
-    const cursor = Math.max(since, seq, await redis(['GET', kSeq]) || 0);
-    return res.status(200).json({ ok: true, cursor: Number(cursor) || 0, ops: out });
+    return res.status(200).json({ ok: true, cursor: nextCursor(since, scores), ops: out });
   } catch (err) {
     if (err && err.noStore) {
       return res.status(503).json({ ok: false, error: 'Crew sync is not configured on the server.' });
@@ -143,6 +148,26 @@ export default async function handler(req, res) {
     console.error('[crew] ', err && err.message ? err.message : err);
     return res.status(502).json({ ok: false, error: 'Crew sync unavailable.' });
   }
+}
+
+/** Advance the caller's cursor to cover exactly what we handed them, and not one
+ *  change further.
+ *
+ *  It is tempting to return the crew's current sequence number, since that is
+ *  "where the log is now". That silently loses data. Upstash serves reads from a
+ *  replica, so a phone can ask a beat after someone else's write and get an empty
+ *  page that the counter already counts. Hand back the counter and that phone
+ *  advances past three readings it never received and never asks for them again —
+ *  no error, no retry, the sheet is just wrong on one device.
+ *
+ *  Only ever moving to the highest score actually delivered makes a lagging read
+ *  a no-op instead: the cursor stays put and the next poll, twenty seconds later,
+ *  picks the same changes up. Re-delivering is free — the client applies an op
+ *  only when it is newer than what it holds. */
+export function nextCursor(since, scores) {
+  let c = Number(since) || 0;
+  (scores || []).forEach(s => { const n = Number(s); if (Number.isFinite(n) && n > c) c = n });
+  return c;
 }
 
 export function safeJson(s) {

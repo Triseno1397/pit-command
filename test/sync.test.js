@@ -173,6 +173,36 @@ describe('working with no signal', () => {
   });
 });
 
+describe('cursor never outruns delivery', () => {
+  /* Caught only against a live store: a replica served an empty page while the
+     sequence counter had already moved. Returning the counter made the phone
+     skip three readings permanently — silent, and unrecoverable without a
+     rejoin. The cursor must therefore describe what was delivered, never what
+     exists. */
+  it('does not advance when the page came back empty', async () => {
+    const { nextCursor } = await import('../api/crew.js');
+    expect(nextCursor(0, [])).toBe(0);
+    expect(nextCursor(7, [])).toBe(7);
+  });
+
+  it('advances only as far as the highest change actually handed over', async () => {
+    const { nextCursor } = await import('../api/crew.js');
+    expect(nextCursor(0, [1, 2, 3])).toBe(3);
+    expect(nextCursor(5, [6, 9, 7])).toBe(9);
+  });
+
+  it('never moves backwards', async () => {
+    const { nextCursor } = await import('../api/crew.js');
+    expect(nextCursor(9, [2, 3])).toBe(9);
+  });
+
+  it('shrugs off junk scores rather than corrupting the cursor', async () => {
+    const { nextCursor } = await import('../api/crew.js');
+    expect(nextCursor(4, [NaN, undefined, null, '6'])).toBe(6);
+    expect(nextCursor(4, null)).toBe(4);
+  });
+});
+
 describe('joining when the server cannot help', () => {
   it('keeps the crew when merely offline — you can join in the trailer', async () => {
     seed();
