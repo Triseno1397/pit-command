@@ -90,15 +90,15 @@ Repainting under someone's hands destroys the field they are typing into.
 
 ```bash
 npm install
-npm run dev            # UI only — /api/parse is not served by vite
-npm test               # 86 tests: num(), analyze(), the parse proxy, DOM smoke tests
+npm run dev            # UI + both api/ functions, via a dev-server plugin
+npm test               # 130 tests: num(), analyze(), sync merge, the parse proxy, DOM smoke tests
 npm run build          # generates icons, then builds to dist/
 npm run preview        # serve the production build
 ```
 
-`npm run dev` serves `/api/parse` too, via a dev-server plugin that mounts the same
-handler Vercel runs — so Smart Fill works locally without a second toolchain. It needs a
-key:
+`npm run dev` serves `/api/parse` **and** `/api/crew`, via a dev-server plugin that mounts
+the same handlers Vercel runs — so Smart Fill and sharing both work locally without a second
+toolchain. Smart Fill needs a key:
 
 ```bash
 cp .env.example .env.local     # then put your real ANTHROPIC_API_KEY in it
@@ -108,6 +108,15 @@ The key is re-read per request, so adding it does not require restarting the dev
 just retry the fill. Without it the app still runs; Smart Fill returns
 *"Smart Fill needs an Anthropic API key on the server."* and every other feature is
 unaffected. `npx vercel dev` also works if you want the exact Vercel runtime.
+
+**Sharing in dev talks to the real store.** `/api/crew` reads the same `KV_REST_API_*`
+credentials as production, so a dev server joins the *live* shared log by default — scratch
+days you make while testing publish to every phone, and deleting one here deletes it
+everywhere. Give the dev server its own log instead:
+
+```bash
+VITE_TEAM_CODE=DEV1-2345 npm run dev
+```
 
 ## Deploying
 

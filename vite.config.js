@@ -37,12 +37,48 @@ function sendJson(res, code, obj) {
    reported it as a connection problem. Mount the same handler on the dev server
    so `npm run dev` behaves like the deploy. */
 function apiDevServer(mode) {
-  // the function reads the key from process.env; mirror .env / .env.local into it.
-  // Re-read per request so adding a key doesn't mean restarting the dev server.
+  /* The functions read their config from process.env; mirror .env / .env.local
+     into it. Re-read per request so adding a key doesn't mean restarting the dev
+     server. The crew route needs the Upstash pair — without them it reports
+     "no store" and every phone on the dev server looks permanently unshared. */
+  const ENV_KEYS = [
+    'ANTHROPIC_API_KEY',
+    'KV_REST_API_URL', 'KV_REST_API_TOKEN',
+    'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
+    'REDIS_REST_API_URL', 'REDIS_REST_API_TOKEN'
+  ];
   const pickUpKey = () => {
-    if (process.env.ANTHROPIC_API_KEY) return;
+    if (ENV_KEYS.every(k => process.env[k])) return;
     const fresh = loadEnv(mode, process.cwd(), '');
-    if (fresh.ANTHROPIC_API_KEY) process.env.ANTHROPIC_API_KEY = fresh.ANTHROPIC_API_KEY;
+    ENV_KEYS.forEach(k => { if (!process.env[k] && fresh[k]) process.env[k] = fresh[k] });
+  };
+
+  /* One adapter for every api/ handler: read the body, put the Express-ish
+     shape the Vercel runtime provides onto `res`, and hand off. */
+  const mount = (server, route) => {
+    server.middlewares.use(route, async (req, res) => {
+      try {
+        pickUpKey();
+        const chunks = [];
+        for await (const c of req) chunks.push(c);
+        req.body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+
+        res.status = code => { res.statusCode = code; return res };
+        res.json = obj => {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(obj));
+          return res;
+        };
+
+        const mod = await server.ssrLoadModule(route + '.js');
+        await mod.default(req, res);
+      } catch (err) {
+        server.config.logger.error(`[${route.slice(1)} dev] ` + (err && err.stack || err));
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: false, error: 'Dev API route failed: ' + (err && err.message || err) }));
+      }
+    });
   };
   return {
     name: 'api-dev-server',
@@ -89,30 +125,12 @@ function apiDevServer(mode) {
         }
       });
 
-      server.middlewares.use('/api/parse', async (req, res) => {
-        try {
-          pickUpKey();
-          const chunks = [];
-          for await (const c of req) chunks.push(c);
-          req.body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
-
-          // adapt Node's res to the Express-ish shape the Vercel handler expects
-          res.status = code => { res.statusCode = code; return res };
-          res.json = obj => {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(obj));
-            return res;
-          };
-
-          const mod = await server.ssrLoadModule('/api/parse.js');
-          await mod.default(req, res);
-        } catch (err) {
-          server.config.logger.error('[api/parse dev] ' + (err && err.stack || err));
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ ok: false, error: 'Dev API route failed: ' + (err && err.message || err) }));
-        }
-      });
+      /* Both deployed functions, so `npm run dev` behaves like the deploy.
+         /api/crew was missing here, which made every local dev server report
+         "sync failed" and show an empty log — the shared season is on the other
+         side of that route. */
+      mount(server, '/api/parse');
+      mount(server, '/api/crew');
     }
   };
 }
