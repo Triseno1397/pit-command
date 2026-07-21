@@ -29,8 +29,42 @@ Installing also matters for your data: a home-screen install makes the browser f
 grant `navigator.storage.persist()`, which is what keeps a logged season from being evicted when the
 phone runs low on space. The **Backups** panel on the hub tells you which mode you are in.
 
-Sharing it is just sharing the link. Everyone gets their own private log — data lives on each
-device, never on a server, and nothing is shared between phones.
+Sharing the link alone gives everyone their own private log. To work the same sheet, see **Crews**.
+
+## Crews
+
+By default a log is private to one phone. Tap **Crew** on the hub and either start a crew or enter
+an existing code, and every phone with that code works from the same log — readings show up on the
+other phones as they land.
+
+Codes look like `KRPT-4829`. The alphabet drops `I`, `L`, `O`, `0` and `1`, because a code gets
+shouted across a loud pit box and written on tape. Eight symbols is about 40 bits, which is not
+guessable against a rate-limited endpoint — worth caring about, since the app URL is public and
+tire data is competitive intel.
+
+Starting a crew uploads what is already on the phone as its contents; joining merges the phone's
+log into the crew's. Leaving stops the sharing and keeps everything already on the device. Nothing
+here deletes a log.
+
+**It still works with no signal.** IndexedDB is still the source of truth and every edit lands
+there first, so a full race day logged in airplane mode is complete the moment it is typed. Sync is
+reconciliation afterwards, never something an edit waits on. Unsent work shows as
+`3 changes waiting for signal` and goes up on its own when there are bars.
+
+**Merging is per field.** Every value carries a path — `r:<sessionId>:post:RF:psi` — and the newest
+edit to *that path* wins. Two people logging different corners of the same session both survive,
+which is the whole point of a second set of hands during a hot practice. Syncing whole documents
+would silently drop one of them. The honest limit: two people editing the *same* field in the same
+moment is last-write-wins, and the earlier value is gone. The alternative is a conflict prompt,
+which is not something anyone is resolving with gloves on.
+
+A phone that spent the weekend offline cannot walk back edits made while it was away — its changes
+carry the timestamp of the edit, not of the sync. Deletes travel as tombstones, so a day deleted in
+the trailer does not come back from the next phone that syncs.
+
+**It will not take the keyboard away from you.** Incoming crew data lands in state and on disk
+immediately, but the screen does not repaint while a field has focus — it waits for you to move off.
+Repainting under someone's hands destroys the field they are typing into.
 
 ## Running it
 
@@ -66,6 +100,10 @@ the only thing that isn't in version control is the secret:
 
 - Vercel → Project → Settings → Environment Variables → `ANTHROPIC_API_KEY` (Production + Preview),
   then redeploy.
+- Crews additionally need a Redis store. `vercel integration add upstash/upstash-kv` provisions one
+  and injects `KV_REST_API_URL` / `KV_REST_API_TOKEN`; `api/crew.js` reads either those or the
+  `UPSTASH_*` spellings. Without a store the app runs normally and the crew panel says so rather
+  than letting anyone join a crew that could never sync.
 
 The key is read server-side in `api/parse.js` only. It is never bundled into the client, so it is
 not exposed by the site being public — but note that anyone who has the link can *use* Smart Fill,
@@ -83,8 +121,10 @@ src/
   render.js              page dispatch + targeted per-session refresh
   smartfill.js           photo/dictation client, image downscale, Web Speech
   exportimport.js        JSON backup round-trip + per-day CSV
+  sync.js                crew sync — flatten/diff, per-path merge, offline outbox
   ui/                    hub, day, analysis readout, summary, hand-rolled SVG charts
 api/parse.js             Vercel function — Anthropic Messages API, server-held key
+api/crew.js              Vercel function — crew log merge, Upstash Redis over REST
 scripts/gen-icons.mjs    PNG icon generator (zlib only, no image deps)
 test/                    vitest
 ```
