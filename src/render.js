@@ -57,6 +57,15 @@ export function startSaveTicker() {
   setInterval(() => { if (!saveStatus().dirty) paintSaveButton() }, 30000);
 }
 
+/* One button, same label and same place on every screen, for "show me every race
+   day again". "All Days" read like a filter — something that widens the list you
+   are looking at — when what it actually does is leave this event and go back to
+   the season. It is named for the destination now, and it is the loudest thing in
+   the header after the save state, because getting back to the list is the single
+   most-used move in the app. */
+const allDaysBtn = `<button class="back-btn home" onclick="go({page:'hub'})">
+  <span class="flagicon"></span>All Race Days</button>`;
+
 export function render() {
   const app = document.getElementById('app');
   const meta = document.getElementById('hdrMeta');
@@ -69,15 +78,18 @@ export function render() {
   else if (view.page === 'day') {
     bar.style.display = 'flex';
     const d = curDay(); if (!d) { go({ page: 'hub' }); return }
-    meta.innerHTML = `<button class="back-btn" onclick="go({page:'hub'})">← All Days</button>
-      <span id="saveSlot">${saveButtonHTML()}</span>`;
+    meta.innerHTML = `${allDaysBtn}<span id="saveSlot">${saveButtonHTML()}</span>`;
     app.innerHTML = dayHTML(d);
   }
   else if (view.page === 'summary') {
     bar.style.display = 'none';
     const d = curDay(); if (!d) { go({ page: 'hub' }); return }
-    meta.innerHTML = `<button class="back-btn" onclick="go({page:'day',dayId:'${d.id}'})">← Back to ${esc(d.name)}</button>
-      <span id="saveSlot">${saveButtonHTML()}</span>`;
+    // Two steps back, both spelled out: this event, or the whole season. The
+    // event name is clipped so a long one cannot push the save state off-screen.
+    const name = (d.name || 'This Day').trim();
+    const short = name.length > 16 ? name.slice(0, 15).trimEnd() + '…' : name;
+    meta.innerHTML = `<button class="back-btn" onclick="go({page:'day',dayId:'${d.id}'})">← ${esc(short)}</button>
+      ${allDaysBtn}<span id="saveSlot">${saveButtonHTML()}</span>`;
     app.innerHTML = summaryHTML(d);
   }
 }

@@ -267,3 +267,60 @@ describe('not stealing the keyboard', () => {
     expect(sync.isEditing()).toBe(false);
   });
 });
+
+/* The default that makes the app worth opening on a second phone. Every rule
+   here is about that default never quietly overriding a deliberate choice. */
+describe('shared by default', () => {
+  const CREW_KEY = 'lltool:crew:v1';
+
+  beforeEach(async () => {
+    const { del } = await import('idb-keyval');
+    await del(CREW_KEY);
+  });
+
+  it('puts a brand new phone on the shared log with no code to type', async () => {
+    await fresh();
+    sync.crew.code = null; sync.crew.solo = false;
+    await sync.loadCrew();
+    expect(sync.crew.code).toBe(sync.SHARED_CODE);
+    expect(sync.onSharedLog()).toBe(true);
+  });
+
+  it('uploads a season that was already on the phone rather than hiding it', async () => {
+    await fresh();
+    const { day, s } = seed();
+    s.pre.tires.RF.psi = '23.5';
+    sync.crew.code = null; sync.crew.solo = false; sync.crew.known = {};
+    await sync.loadCrew();
+    // joining is not a fresh start: the existing day is staged for the others
+    expect(sync.crew.outbox[`d:${day.id}:!`]).toBeTruthy();
+    expect(sync.crew.outbox[`r:${s.id}:pre:RF:psi`].v).toBe('23.5');
+  });
+
+  it('does not drag a phone back onto the shared log after it opted out', async () => {
+    await fresh();
+    await sync.leaveCrew();
+    expect(sync.crew.code).toBeNull();
+    expect(sync.crew.solo).toBe(true);
+
+    // a reload must respect that, or "stop sharing" is a button that does nothing
+    await fresh();
+    sync.crew.code = null; sync.crew.solo = false;
+    await sync.loadCrew();
+    expect(sync.crew.code).toBeNull();
+  });
+
+  it('leaves a private crew code alone across reloads', async () => {
+    await fresh();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ ok: true, cursor: 4, ops: [] })
+    });
+    await sync.joinCrew('ABCD-2345');
+
+    await fresh();
+    sync.crew.code = null; sync.crew.solo = false;
+    await sync.loadCrew();
+    expect(sync.crew.code).toBe('ABCD-2345');
+    expect(sync.onSharedLog()).toBe(false);
+  });
+});

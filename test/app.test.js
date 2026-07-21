@@ -175,19 +175,86 @@ describe('summary and export', () => {
   });
 });
 
-describe('two-tap delete', () => {
-  it('arms on the first tap and only removes on the second', () => {
+describe('getting back to the list of days', () => {
+  const hdr = () => document.getElementById('hdrMeta');
+
+  it('offers the same named way out from a day and from a summary', async () => {
+    const S = await import('../src/state.js');
     window.addDay();
+    const dayId = S.state.days[0].id;
+
+    // inside a day
+    expect(hdr().innerHTML).toContain('All Race Days');
+    expect(hdr().innerHTML).not.toContain('All Days<');
+
+    // and one level deeper, where the old build only offered "back to the day"
+    window.go({ page: 'summary', dayId });
+    expect(hdr().innerHTML).toContain('All Race Days');
+
+    // and it goes to the list of days, not back one step to the day itself
+    const home = [...hdr().querySelectorAll('button')].find(b => b.textContent.includes('All Race Days'));
+    expect(home.getAttribute('onclick')).toBe("go({page:'hub'})");
     window.go({ page: 'hub' });
     expect(app().querySelectorAll('.daycard')).toHaveLength(1);
+  });
 
-    const dayId = app().querySelector('.daycard').getAttribute('onclick').match(/dayId:'([^']+)'/)[1];
+  it('clips a long event name so the save state stays on screen', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.updDay('name', 'Thursday Night Thunder Championship Round');
+    window.go({ page: 'summary', dayId: S.state.days[0].id });
+    expect(hdr().innerHTML).not.toContain('Championship Round');
+    expect(hdr().innerHTML).toContain('…');
+    expect(hdr().querySelector('#saveSlot')).toBeTruthy();
+  });
+});
+
+describe('deleting a whole race day', () => {
+  const modal = () => document.getElementById('modal');
+
+  function firstDayId() {
+    return app().querySelector('.daycard').getAttribute('onclick').match(/dayId:'([^']+)'/)[1];
+  }
+
+  it('asks first, names the day, and keeps it if you back out', () => {
+    window.addDay();
+    window.updDay('name', 'Hickory 100');
+    window.addSession('Practice');
+    window.go({ page: 'hub' });
+    const dayId = firstDayId();
+
     window.delDay(dayId);
-    expect(app().innerHTML).toContain('Tap again');
+    // the confirmation has to identify which day, not just say "are you sure"
+    expect(modal().innerHTML).toContain('Hickory 100');
+    expect(modal().innerHTML).toContain('1 session');
     expect(app().querySelectorAll('.daycard')).toHaveLength(1);
 
+    window.closeModal();
+    expect(app().querySelectorAll('.daycard')).toHaveLength(1);
+  });
+
+  it('removes the day on confirm and leaves it recoverable from Backups', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.updDay('name', 'Hickory 100');
+    window.go({ page: 'hub' });
+    const dayId = firstDayId();
+
     window.delDay(dayId);
+    await window.reallyDelDay(dayId);
+
+    expect(S.state.days).toHaveLength(0);
     expect(app().querySelectorAll('.daycard')).toHaveLength(0);
+    expect(modal().style.display).toBe('none');
+
+    // a night's work does not vanish on one tap — the pre-delete point still has it
+    const snaps = await S.listSnapshots();
+    expect(snaps.some(s => s.reason === 'before-delete' && s.json.includes('Hickory 100'))).toBe(true);
+  });
+
+  it('is reachable from inside the day as well as from the list', () => {
+    window.addDay();
+    expect(app().innerHTML).toContain(`delDay('`);
   });
 });
 

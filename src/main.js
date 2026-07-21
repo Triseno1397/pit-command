@@ -24,7 +24,11 @@ import { smartPhoto, smartText, toggleDictate, stopDictate, clearDraft } from '.
 import { exportJSON, importJSON, exportCSV, exportAllCSV } from './exportimport.js';
 import { backupsHTML } from './ui/backups.js';
 import { crewHTML } from './ui/crew.js';
-import { crew, loadCrew, joinCrew, leaveCrew, syncNow, startAutoSync, makeCode, validCode, onSync } from './sync.js';
+import { deleteDayHTML } from './ui/day.js';
+import {
+  crew, loadCrew, joinCrew, leaveCrew, rejoinShared, syncNow,
+  startAutoSync, makeCode, validCode, onSync
+} from './sync.js';
 import { checkDevKey, saveDevKey } from './devkey.js';
 
 hooks.render = render;
@@ -36,13 +40,25 @@ window.go = go;
 
 window.addDay = () => { const d = newDay(); state.days.push(d); queueSave(); go({ page: 'day', dayId: d.id }) };
 
+/* Deleting a whole race day is the only destructive act in the app that cannot
+   be re-typed from a tire sheet, and on a shared log it takes the day off every
+   phone. So it asks, by name, and lays down a restore point on the way out. */
 window.delDay = id => {
-  if (pendingDel === id) {
-    disarmDelete();
-    state.days = state.days.filter(x => x.id !== id);
-    queueSave(); render(); return;
-  }
-  armDelete(id, render);
+  const d = state.days.find(x => x.id === id);
+  if (!d) return;
+  openModal(deleteDayHTML(d));
+};
+
+window.reallyDelDay = async id => {
+  const d = state.days.find(x => x.id === id);
+  if (!d) { closeModal(); return }
+  const name = d.name || 'That day';
+  await pushSnapshot('before-delete');       // recoverable from Backups
+  state.days = state.days.filter(x => x.id !== id);
+  queueSave();
+  closeModal();
+  go({ page: 'hub' });
+  toast(name + ' deleted. Backups still has it if that was the wrong one.');
 };
 
 window.updDay = (f, v) => {
@@ -161,23 +177,33 @@ window.restorePoint = async ts => {
   else toast('Could not restore that point.', true);
 };
 
-/* ---------- crew ---------- */
-window.openCrew = () => { openModal('<div class="modal-hd"><h3>Crew</h3></div>' + crewHTML()) };
+/* ---------- where the log lives ---------- */
+const crewPanel = () => '<div class="modal-hd"><h3>Sharing</h3></div>' + crewHTML();
+
+/** Marked so a repaint can find this panel and not, say, the delete confirmation
+ *  that happens to be the open modal instead. */
+window.openCrew = () => { openModal(`<div id="crewPanel">${crewPanel()}</div>`) };
 
 function repaintCrew() {
-  const card = document.querySelector('.modal-card');
-  if (card && document.getElementById('modal').style.display !== 'none') {
-    card.innerHTML = crewHTML();
-  }
+  const panel = document.getElementById('crewPanel');
+  if (panel) panel.innerHTML = crewPanel();
 }
 
 window.crewCreate = async () => {
   const code = makeCode();
   const r = await joinCrew(code);
-  repaintCrew();
+  repaintCrew(); render();
   if (r.ok && r.offline) toast('Crew ' + code + ' started. It will sync when there is signal.');
   else if (r.ok) toast('Crew ' + code + ' started. Read that code to the rest of the crew.');
   else toast(r.error || 'Could not start the crew.', true);
+};
+
+window.crewShared = async () => {
+  const r = await rejoinShared();
+  repaintCrew(); render();
+  if (r.ok && r.offline) toast('Sharing on. This phone uploads as soon as there is signal.');
+  else if (r.ok) toast('Sharing on. Every phone on the app now works this log.');
+  else toast(r.error || 'Could not turn sharing on.', true);
 };
 
 window.crewJoin = async () => {
@@ -202,7 +228,7 @@ window.crewSync = async () => {
 window.crewLeave = async () => {
   await leaveCrew();
   repaintCrew(); render();
-  toast('Left the crew. Everything on this phone stayed put.');
+  toast('Sharing off. Everything on this phone stayed put.');
 };
 
 /* Smart Fill availability flips with the radio — repaint the buttons. */

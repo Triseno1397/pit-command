@@ -25,6 +25,31 @@ export function overviewHTML(d) {
 const CLASSES = ['Limited Late Model', 'Late Model', 'Super Late Model', 'Crate Late Model',
   'Modified', 'Street Stock', 'Sportsman', 'Other'];
 
+/** The one screen that asks before a whole event goes away.
+ *
+ *  Deleting a day used to be a two-tap arm on a small button. That was already
+ *  thin for a night's work, and now that the log is shared it deletes that night
+ *  off every phone on the crew — so it gets a real question, with the name and
+ *  the session count in it, because "Race Day 3" and "Race Day 4" look identical
+ *  on a small button and there is no undo button in a hot pit box. */
+export function deleteDayHTML(d) {
+  const n = d.sessions.length;
+  const where = [d.track, d.date].filter(Boolean).join(' · ');
+  return `<div class="modal-hd"><h3>Delete this race day?</h3></div>
+    <div class="del-target">
+      <b>${esc(d.name) || 'Untitled Day'}</b>
+      <span>${esc(where) || 'no track or date set'}</span>
+      <span>${n} session${n === 1 ? '' : 's'} of readings</span>
+    </div>
+    <p class="sum-note">This removes the day from every phone on the log, not just this one.
+      A restore point is taken first, so you can still put it back from
+      <b>Backups</b> if this turns out to be the wrong one.</p>
+    <div class="crew-row">
+      <button class="mini-btn" onclick="closeModal()">Keep it</button>
+      <button class="mini-btn danger" onclick="reallyDelDay('${d.id}')">Delete the day</button>
+    </div>`;
+}
+
 /** Everything that identifies the day: who drove it, what car, where, when.
  *  Kept at the top of the day so a season's worth of entries stays labelled. */
 function dayDetailsHTML(d) {
@@ -32,6 +57,7 @@ function dayDetailsHTML(d) {
   return `<section class="daydetails">
     <div class="dd-hd">
       <span>Race Day Details</span>
+      <button class="mini-btn danger" onclick="delDay('${d.id}')">Delete Day</button>
       <button class="sum-btn" onclick="go({page:'summary',dayId:'${d.id}'})">Summary ▸</button>
     </div>
     <div class="dd-grid">

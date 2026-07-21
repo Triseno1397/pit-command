@@ -29,22 +29,41 @@ Installing also matters for your data: a home-screen install makes the browser f
 grant `navigator.storage.persist()`, which is what keeps a logged season from being evicted when the
 phone runs low on space. The **Backups** panel on the hub tells you which mode you are in.
 
-Sharing the link alone gives everyone their own private log. To work the same sheet, see **Crews**.
+Sharing the link is all it takes — every phone that opens it lands on the same log. See **Sharing**.
 
-## Crews
+## Sharing
 
-By default a log is private to one phone. Tap **Crew** on the hub and either start a crew or enter
-an existing code, and every phone with that code works from the same log — readings show up on the
-other phones as they land.
+**Shared is the default.** A phone that has never chosen anything joins the shared team log the
+first time it opens the app. Enter a race day on one phone and it appears on the others; readings
+they enter appear here. There is no code to pass around and nothing to set up, because the common
+case is one crew, one sheet, and several sets of hands.
 
-Codes look like `KRPT-4829`. The alphabet drops `I`, `L`, `O`, `0` and `1`, because a code gets
-shouted across a loud pit box and written on tape. Eight symbols is about 40 bits, which is not
-guessable against a rate-limited endpoint — worth caring about, since the app URL is public and
-tire data is competitive intel.
+A phone that already had a season on it before this default existed does not lose it or hide it:
+joining stages that whole season for upload, so upgrading publishes the existing work.
+
+Tap **Shared** on the hub to see where the log is going, and to change it:
+
+| | |
+|---|---|
+| **Shared** | the default — every phone on the app, no code |
+| **Private crew code** | your team only, a separate season from the shared log |
+| **Stop sharing** | this phone only; remembered across reloads |
+
+The last two are deliberate acts and are remembered, so the shared default never quietly overrides
+a choice someone made on purpose.
+
+Private codes look like `KRPT-4829`. The alphabet drops `I`, `L`, `O`, `0` and `1`, because a code
+gets shouted across a loud pit box and written on tape. Eight symbols is about 40 bits, which is not
+guessable against a rate-limited endpoint.
+
+**What "shared" means, plainly.** The shared log is keyed to this deployment, not to an account —
+there are no logins. Anyone who has the app URL sees the days on it and can edit or delete them.
+That is the trade for zero setup. If tire data is competitive intel you want fenced off, use a
+private crew code, or build with `VITE_TEAM_CODE=ABCD-2345` to give the deployment its own shared
+log that a stranger with the public URL does not land on.
 
 Starting a crew uploads what is already on the phone as its contents; joining merges the phone's
-log into the crew's. Leaving stops the sharing and keeps everything already on the device. Nothing
-here deletes a log.
+log into the crew's. Stopping keeps everything already on the device. None of it deletes a log.
 
 **It still works with no signal.** IndexedDB is still the source of truth and every edit lands
 there first, so a full race day logged in airplane mode is complete the moment it is typed. Sync is
@@ -100,10 +119,12 @@ the only thing that isn't in version control is the secret:
 
 - Vercel → Project → Settings → Environment Variables → `ANTHROPIC_API_KEY` (Production + Preview),
   then redeploy.
-- Crews additionally need a Redis store. `vercel integration add upstash/upstash-kv` provisions one
-  and injects `KV_REST_API_URL` / `KV_REST_API_TOKEN`; `api/crew.js` reads either those or the
-  `UPSTASH_*` spellings. Without a store the app runs normally and the crew panel says so rather
-  than letting anyone join a crew that could never sync.
+- Sharing additionally needs a Redis store. `vercel integration add upstash/upstash-kv` provisions
+  one and injects `KV_REST_API_URL` / `KV_REST_API_TOKEN`; `api/crew.js` reads either those or the
+  `UPSTASH_*` spellings. Without a store the app runs normally and the Sharing panel says so
+  plainly, rather than letting anyone believe a log is reaching phones it never will.
+- `VITE_TEAM_CODE` (optional, build time) sets which shared log this deployment's phones join by
+  default. It must match the code shape — e.g. `KRPT-4829`. Unset, it is `TEAM-BASE`.
 
 The key is read server-side in `api/parse.js` only. It is never bundled into the client, so it is
 not exposed by the site being public — but note that anyone who has the link can *use* Smart Fill,
@@ -121,7 +142,7 @@ src/
   render.js              page dispatch + targeted per-session refresh
   smartfill.js           photo/dictation client, image downscale, Web Speech
   exportimport.js        JSON backup round-trip + per-day CSV
-  sync.js                crew sync — flatten/diff, per-path merge, offline outbox
+  sync.js                sharing — shared-by-default join, flatten/diff, per-path merge, outbox
   ui/                    hub, day, analysis readout, summary, hand-rolled SVG charts
 api/parse.js             Vercel function — Anthropic Messages API, server-held key
 api/crew.js              Vercel function — crew log merge, Upstash Redis over REST
@@ -234,6 +255,8 @@ searchable rather than becoming a pile of untitled days.
 | 4 | Smart Fill photo/dictation fills the active tab; "and a quarter" → .25; offline disabled state | ✅ verified live end to end — a dictated line with a mid-sentence correction, spoken fractions, three bare temps, and crew chatter returned `RF psi 24.5 · size 88.25 · 210/195/180`, `LR psi 18`, `trackTemp 118`, chatter ignored. Contract covered by `test/parse.test.js`, offline state by `test/app.test.js` |
 | 5 | Export → wipe → import restores everything | `test/app.test.js` |
 | 6 | Lighthouse PWA installability; no console errors | manifest + SW verified, test run is clean of unhandled errors; **run Lighthouse against the deploy** |
+| 7 | A day entered on one phone appears on another that has never been set up | ✅ verified live against `/api/crew` — a device with no history and an empty outbox pulled a write made by a different device on `TEAM-BASE` in one round trip. Auto-join and its opt-out rules covered by `test/sync.test.js` |
+| 8 | Deleting a race day asks first, names the day, and stays recoverable | `test/app.test.js` — the confirmation carries the day name and session count, and a `before-delete` restore point is written before the day is removed |
 
 Item 4 is now signed off — the first real model call surfaced a schema bug that no mocked test could
 have caught (see the Smart Fill model note above). What remains is device work: install it on a

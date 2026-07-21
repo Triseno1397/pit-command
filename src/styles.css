@@ -98,10 +98,14 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
    of entries stays readable long after the night itself. */
 .daydetails{background:var(--panel);border:1px solid var(--line);border-radius:8px;
   padding:12px;margin-bottom:14px}
-.dd-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+.dd-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;
   font-family:var(--disp);font-weight:800;font-size:.82rem;letter-spacing:.18em;
   text-transform:uppercase;color:var(--chalk)}
-.dd-hd>span:first-child{flex:1}
+.dd-hd>span:first-child{flex:1 0 auto}
+/* Delete and Summary travel together when the row wraps on a narrow phone —
+   Delete must never end up sitting alone under the crew's thumb. */
+.dd-hd .mini-btn{margin-left:auto}
+.dd-hd .sum-btn{margin-left:0}
 .dd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .dd-fld{min-width:0}
 .dd-fld label{display:block;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;
@@ -367,3 +371,27 @@ table.sumtbl tr:last-child td{border-bottom:none}
 .crew-msg{margin:8px 0;font-size:13px}
 .crew-msg.bad{color:#F0524F}
 .mini-btn.danger{color:#F0524F;border-color:rgba(240,82,79,.4)}
+.mini-btn.danger:hover{color:#fff;background:var(--loose);border-color:var(--loose)}
+/* Sharing is the normal state, so the hub button reads as on rather than as a
+   warning — the crew should be able to tell at a glance without opening it. */
+.mini-btn.on{color:var(--good);border-color:#2c4a36;background:rgba(67,201,102,.08)}
+
+/* ---------- getting back to the list ----------
+   The one move made more than any other. Same label, same corner, every screen. */
+.back-btn.home{color:var(--chalk);border-color:rgba(255,212,71,.45);background:rgba(255,212,71,.08)}
+.back-btn.home:hover{background:rgba(255,212,71,.16)}
+.back-btn .flagicon{display:inline-block;width:13px;height:13px;flex:0 0 auto;
+  background:conic-gradient(#FFD447 0 25%,#111 0 50%,#FFD447 0 75%,#111 0);
+  background-size:6.5px 6.5px;border:1px solid rgba(255,212,71,.5)}
+@media (max-width:420px){.back-btn{padding:8px 10px;letter-spacing:.06em}}
+
+/* how many days are in the trailer, above the list */
+.hub-count{font-family:var(--disp);font-weight:700;font-size:.72rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim);margin:0 0 8px 2px}
+
+/* what exactly is about to be deleted */
+.del-target{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--loose);
+  border-radius:6px;padding:10px 12px;margin:10px 0 12px;display:flex;flex-direction:column;gap:2px}
+.del-target b{font-family:var(--disp);font-weight:800;font-size:1.15rem;letter-spacing:.05em;
+  text-transform:uppercase}
+.del-target span{font-family:var(--mono);font-size:.75rem;color:var(--dim)}

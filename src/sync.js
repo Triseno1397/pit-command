@@ -24,6 +24,18 @@ import { hooks } from './hooks.js';
 
 const CREW_KEY = 'lltool:crew:v1';
 
+/* The sheet is supposed to be the same sheet on every phone. A device that has
+   never chosen anything therefore joins the shared team log on first run rather
+   than starting a private one of its own — nobody should have to read a code
+   across a loud pit box just to see the day everyone else is already logging.
+   A crew that wants its own separate log can still enter a code, and a phone can
+   still drop to local-only; both of those are deliberate acts, and both are
+   remembered so this default never quietly overrides them.
+
+   Set VITE_TEAM_CODE at build time to give a deployment its own shared log. */
+export const SHARED_CODE =
+  String((import.meta.env && import.meta.env.VITE_TEAM_CODE) || 'TEAM-BASE').toUpperCase();
+
 const DAY_FIELDS = ['name', 'track', 'dateISO', 'date', 'driver', 'car', 'carClass', 'notes'];
 const SESS_FIELDS = ['type', 'name', 'notes'];
 const TIRE_FIELDS = ['psi', 'size', 'ti', 'tm', 'to'];
@@ -35,7 +47,8 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_RE = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
 export const crew = {
-  code: null,          // null = solo, this device only (the original behaviour)
+  code: null,          // null = solo, this device only
+  solo: false,         // true only if someone explicitly left — stops the auto-join below
   device: null,
   cursor: 0,
   known: {},           // path -> { v, t }
@@ -303,27 +316,44 @@ export function flushPendingRepaint() {
 
 /* ---------- joining, leaving, persistence ---------- */
 
+/** True when this phone is on the log everyone else lands on by default. */
+export function onSharedLog() { return crew.code === SHARED_CODE }
+
 async function persist() {
   try {
     await idbSet(CREW_KEY, {
-      code: crew.code, device: crew.device, cursor: crew.cursor,
+      code: crew.code, solo: crew.solo, device: crew.device, cursor: crew.cursor,
       known: crew.known, outbox: crew.outbox
     });
   } catch (e) { /* sync metadata is recoverable; never block an edit on it */ }
 }
 
 export async function loadCrew() {
+  let stored = null;
   try {
-    const c = await idbGet(CREW_KEY);
-    if (c) {
-      crew.code = c.code || null;
-      crew.device = c.device || newDeviceId();
-      crew.cursor = c.cursor || 0;
-      crew.known = c.known || {};
-      crew.outbox = c.outbox || {};
+    stored = await idbGet(CREW_KEY);
+    if (stored) {
+      crew.code = stored.code || null;
+      crew.solo = !!stored.solo;
+      crew.device = stored.device || newDeviceId();
+      crew.cursor = stored.cursor || 0;
+      crew.known = stored.known || {};
+      crew.outbox = stored.outbox || {};
     }
   } catch (e) { /* fall through to a fresh device id */ }
   if (!crew.device) crew.device = newDeviceId();
+
+  /* Nothing chosen on this phone — either it is brand new, or it predates shared
+     logs and has a season sitting in IndexedDB. Both join the shared log, and in
+     the second case collectLocalChanges() stages that whole season for upload,
+     so upgrading publishes the existing work instead of hiding it. */
+  if (!crew.code && !crew.solo) {
+    crew.code = SHARED_CODE;
+    crew.cursor = 0; crew.known = {}; crew.outbox = {};
+    collectLocalChanges();
+    await persist();
+  }
+
   crew.loaded = true;
   notify();
 }
@@ -334,6 +364,7 @@ export async function joinCrew(code) {
   const c = String(code || '').toUpperCase().trim();
   if (!validCode(c)) return { ok: false, error: 'That code does not look right.' };
   crew.code = c;
+  crew.solo = false;
   crew.cursor = 0;
   crew.known = {};
   crew.outbox = {};
@@ -351,6 +382,12 @@ export async function joinCrew(code) {
   if (crew.unconfigured) {
     const why = crew.error;
     await leaveCrew();
+    /* Not the same as choosing to work alone. leaveCrew() sets `solo` so a
+       deliberate opt-out survives a reload; here the opt-out was the server's
+       doing, so clear it — once sharing is set up, the next boot should pick the
+       shared log back up on its own rather than needing to be asked again. */
+    crew.solo = false;
+    await persist();
     crew.error = why;
     notify();
     return { ok: false, error: why, unconfigured: true };
@@ -358,13 +395,19 @@ export async function joinCrew(code) {
   return { ok: true, offline: true };
 }
 
-/** Leave. The log stays on this device untouched — leaving is not deleting. */
+/** Leave. The log stays on this device untouched — leaving is not deleting.
+ *  `solo` is what makes it stick: without it the next boot would see no code and
+ *  helpfully re-join the shared log, undoing the choice that was just made. */
 export async function leaveCrew() {
-  crew.code = null; crew.cursor = 0; crew.known = {}; crew.outbox = {};
+  crew.code = null; crew.solo = true;
+  crew.cursor = 0; crew.known = {}; crew.outbox = {};
   crew.error = null; crew.lastSyncAt = null;
   await persist();
   notify();
 }
+
+/** Back onto the log every other phone is on. */
+export function rejoinShared() { return joinCrew(SHARED_CODE) }
 
 /* Sync on the events that actually mean "we might have signal or news":
    coming back online, returning to the app, and a slow background tick. */
