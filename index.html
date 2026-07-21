@@ -29,11 +29,9 @@
 
 <div class="wrap" id="app"></div>
 <div id="modal" style="display:none"></div>
-<div class="add-bar" id="addBar" style="display:none">
-  <button class="main" onclick="addSession('Practice')">+ Practice</button>
-  <button onclick="addSession('Qualifying')">+ Qualifying</button>
-  <button onclick="addSession('Main')">+ Main</button>
-</div>
+<!-- Filled in by render() per race day: which types are still available depends
+     on what that day already holds. -->
+<div class="add-bar" id="addBar" style="display:none"></div>
 
 <script type="module" src="/src/main.js"></script>
 </body>

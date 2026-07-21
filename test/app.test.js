@@ -515,7 +515,7 @@ describe('Smart Fill panel', () => {
     const { findS } = await import('../src/state.js');
     const s = findS(sid);
 
-    const { n, summary } = applyParsed(s, 'pre', {
+    const { n, summary } = applyParsed(s, 'post', {
       trackTemp: 118,
       tires: {
         RF: { psi: 24.5, size: 88.25, ti: 210, tm: 195, to: 180 },
@@ -532,8 +532,29 @@ describe('Smart Fill panel', () => {
     expect(summary).toContain('in 210');
     expect(summary).toContain('LR psi 20');
     expect(summary).not.toContain('LF');           // nothing heard for that corner
-    expect(s.pre.tires.RF.psi).toBe('24.5');       // stored as the string the sheet holds
+    expect(s.post.tires.RF.psi).toBe('24.5');      // stored as the string the sheet holds
+    expect(s.post.trackTemp).toBe('118');
+  });
+
+  // A temperature heard while the cold sheet is open is a misread — there is no
+  // box for it there, so writing it would hide a number nobody can correct.
+  it('drops tread temps on the cold sheet and keeps psi and size', async () => {
+    const { applyParsed } = await import('../src/smartfill.js');
+    const { findS } = await import('../src/state.js');
+    const s = findS(sess());
+
+    const { n, summary } = applyParsed(s, 'pre', {
+      trackTemp: 118,
+      tires: { RF: { psi: 22, size: 88, ti: 210, tm: 195, to: 180 }, LF: {}, LR: {}, RR: {} }
+    });
+
+    expect(n).toBe(3);                          // track temp + psi + size, no temps
+    expect(summary).not.toContain('in 210');
+    expect(s.pre.tires.RF.psi).toBe('22');
+    expect(s.pre.tires.RF.ti).toBe('');
+    // and the one track reading lands on both sheets
     expect(s.pre.trackTemp).toBe('118');
+    expect(s.post.trackTemp).toBe('118');
   });
 });
 
@@ -576,6 +597,155 @@ describe('Smart Fill error messages', () => {
     const big = new Error('x'); big.status = 413;
     expect(explain(rate)).toMatch(/Rate limited/i);
     expect(explain(big)).toMatch(/too large/i);
+  });
+});
+
+describe('the cold sheet and the hot sheet ask for different things', () => {
+  const sess = () => {
+    window.addDay(); window.addSession('Practice');
+    return app().querySelector('.sess').id.replace('card-', '');
+  };
+
+  it('takes no tread temps cold — a cold tire has nothing to say', () => {
+    const sid = sess();
+    expect(app().innerHTML).not.toContain('Tire Temps °F');
+    ['Inside', 'Middle', 'Outside'].forEach(l => expect(app().innerHTML).not.toContain(`<label>${l}</label>`));
+    // pressures and sizes are still taken cold
+    expect(app().innerHTML).toContain('Pressure psi');
+    expect(app().innerHTML).toContain('Size / rollout in');
+
+    window.setTab(sid, 'post');
+    expect(app().innerHTML).toContain('Tire Temps °F');
+    ['Inside', 'Middle', 'Outside'].forEach(l => expect(app().innerHTML).toContain(`<label>${l}</label>`));
+  });
+
+  it('puts Changes Made above the track temp row, cold only', () => {
+    const sid = sess();
+    const html = app().innerHTML;
+    expect(html).toContain('Changes Made');
+    expect(html.indexOf('Changes Made')).toBeLessThan(html.indexOf('Track Temp'));
+
+    window.setTab(sid, 'post');
+    expect(app().innerHTML).not.toContain('Changes Made');
+  });
+
+  it('asks for tire life going out and laps run coming back', () => {
+    const sid = sess();
+    expect(app().innerHTML).toContain('Tire Life');
+    expect(app().innerHTML).not.toContain('Laps Run');
+
+    window.setTab(sid, 'post');
+    expect(app().innerHTML).toContain('Laps Run');
+    expect(app().innerHTML).not.toContain('Tire Life');
+  });
+
+  it('keeps what was typed into the three new boxes', async () => {
+    const { findS } = await import('../src/state.js');
+    const sid = sess();
+    window.updRd(sid, 'pre', 'changes', 'Round of wedge out, 1/2 psi off the RF.');
+    window.updRd(sid, 'pre', 'tireLife', '2 runs');
+    window.updRd(sid, 'post', 'laps', '18');
+
+    const s = findS(sid);
+    expect(s.pre.changes).toContain('Round of wedge out');
+    expect(s.pre.tireLife).toBe('2 runs');
+    expect(s.post.laps).toBe('18');
+    // and they show up in the readout rather than being write-only
+    const anal = document.getElementById('anal-' + sid).innerHTML;
+    expect(anal).toContain('Laps Run');
+    expect(anal).toContain('Tire Life');
+  });
+
+  it('carries the cold track temp onto the hot sheet by itself', async () => {
+    const { findS } = await import('../src/state.js');
+    const sid = sess();
+    window.updTT(sid, 'pre', '118');
+
+    expect(findS(sid).post.trackTemp).toBe('118');
+    window.setTab(sid, 'post');
+    expect(app().querySelector('.tt-row input').value).toBe('118');
+
+    // correcting it hot afterwards stays a hot-only edit
+    window.updTT(sid, 'post', '121');
+    expect(findS(sid).pre.trackTemp).toBe('118');
+  });
+});
+
+describe('what a race day can hold', () => {
+  const bar = () => document.getElementById('addBar');
+  const btn = label => [...bar().querySelectorAll('button')].find(b => b.textContent.includes(label));
+
+  it('runs practice all afternoon', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    ['Practice', 'Practice', 'Practice', 'Practice'].forEach(t => window.addSession(t));
+    expect(S.state.days[0].sessions).toHaveLength(4);
+    expect(S.state.days[0].sessions.map(s => s.name)).toEqual(['Practice 1', 'Practice 2', 'Practice 3', 'Practice 4']);
+    expect(btn('Practice').disabled).toBe(false);
+  });
+
+  it('qualifies once and no more', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.addSession('Qualifying');
+    expect(S.state.days[0].sessions[0].name).toBe('Qualifying');   // no number — there is only one
+    expect(btn('Qualifying').disabled).toBe(true);
+
+    window.addSession('Qualifying');                                // a stale screen, or a mis-tap
+    expect(S.state.days[0].sessions).toHaveLength(1);
+  });
+
+  it('runs one main or two, never three', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.addSession('Main');
+    expect(btn('Main').disabled).toBe(false);                       // a twin-main night is legal
+    window.addSession('Main');
+    expect(S.state.days[0].sessions.map(s => s.name)).toEqual(['Main 1', 'Main 2']);
+    expect(btn('Main').disabled).toBe(true);
+
+    window.addSession('Main');
+    expect(S.state.days[0].sessions).toHaveLength(2);
+  });
+
+  it('will not let a card be re-typed past the limit either', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.addSession('Qualifying');
+    window.addSession('Practice');
+    const practiceId = S.state.days[0].sessions[1].id;
+
+    window.updS(practiceId, 'type', 'Qualifying');
+    expect(S.state.days[0].sessions[1].type).toBe('Practice');      // refused, card unchanged
+
+    window.updS(practiceId, 'type', 'Main');                        // still room for a main
+    expect(S.state.days[0].sessions[1].type).toBe('Main');
+  });
+
+  it('refuses to duplicate a session the day has no room for', async () => {
+    const S = await import('../src/state.js');
+    window.addDay();
+    window.addSession('Qualifying');
+    window.dupSession(S.state.days[0].sessions[0].id);
+    expect(S.state.days[0].sessions).toHaveLength(1);
+  });
+});
+
+describe('the crew chief readout', () => {
+  it('reads front stagger hot where the track temp tile used to be', () => {
+    window.addDay(); window.addSession('Practice');
+    const sid = app().querySelector('.sess').id.replace('card-', '');
+    window.updTT(sid, 'pre', '118');
+    window.updT(sid, 'pre', 'RF', 'size', '88');
+    window.updT(sid, 'pre', 'LF', 'size', '87 1/2');
+    window.updT(sid, 'post', 'RF', 'size', '88 1/4');
+    window.updT(sid, 'post', 'LF', 'size', '87 1/2');
+    window.updT(sid, 'post', 'RF', 'tm', '210');
+
+    const anal = document.getElementById('anal-' + sid).innerHTML;
+    expect(anal).toContain('Front Stagger (hot)');
+    expect(anal).toContain('0.75"');
+    expect(anal).not.toContain('Track Temp');
   });
 });
 

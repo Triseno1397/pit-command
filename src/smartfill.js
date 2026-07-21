@@ -57,15 +57,25 @@ export function explain(e) {
 
 const FIELD_LABEL = { psi: 'psi', size: 'size', ti: 'in', tm: 'mid', to: 'out' };
 
+/* Tread temps are only ever taken hot, so a temperature the model heard while
+   the cold sheet was open is a misread — writing it would put a number in a box
+   the crew cannot see to correct. */
+const WRITABLE = { pre: ['psi', 'size'], post: ['psi', 'size', 'ti', 'tm', 'to'] };
+
 /** Writes the extraction into the reading and reports exactly what landed where,
  *  so the crew can eyeball it against what they said instead of trusting a count. */
 export function applyParsed(sess, tab, parsed) {
   let n = 0; const rd = sess[tab]; const parts = [];
-  if (parsed.trackTemp != null) { rd.trackTemp = String(parsed.trackTemp); n++; parts.push('track temp ' + parsed.trackTemp) }
+  const fields = WRITABLE[tab] || WRITABLE.post;
+  if (parsed.trackTemp != null) {
+    rd.trackTemp = String(parsed.trackTemp); n++; parts.push('track temp ' + parsed.trackTemp);
+    // same carry-over the typed box does — one reading, both sheets
+    if (tab === 'pre') sess.post.trackTemp = rd.trackTemp;
+  }
   if (parsed.tires) TIRES.forEach(k => {
     const src = parsed.tires[k]; if (!src) return;
     const got = [];
-    ['psi', 'size', 'ti', 'tm', 'to'].forEach(f => {
+    fields.forEach(f => {
       if (src[f] != null && src[f] !== '') {
         rd.tires[k][f] = String(src[f]); n++;
         got.push(FIELD_LABEL[f] + ' ' + src[f]);

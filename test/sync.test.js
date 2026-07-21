@@ -51,6 +51,29 @@ describe('flatten', () => {
     const tirePaths = Object.keys(flat).filter(p => /^r:s2000:(pre|post):[A-Z]{2}:/.test(p));
     expect(tirePaths).toHaveLength(40);
   });
+
+  /* Changes Made, Tire Life and Laps Run are typed once, on one phone, and are
+     exactly the context the rest of the crew is missing — if they do not travel
+     they may as well not have been written down. */
+  it('carries the reading-level boxes, not just the corners', () => {
+    const { s } = seed();
+    s.pre.changes = 'Round of wedge out';
+    s.pre.tireLife = '2 runs';
+    s.post.laps = '18';
+
+    const flat = sync.flatten(state.state);
+    expect(flat['r:s2000:pre:chg']).toBe('Round of wedge out');
+    expect(flat['r:s2000:pre:life']).toBe('2 runs');
+    expect(flat['r:s2000:post:laps']).toBe('18');
+
+    sync.applyOp({ p: 'r:s2000:pre:chg', v: 'Track bar up 1/4', t: 9000 });
+    sync.applyOp({ p: 'r:s2000:post:laps', v: '22', t: 9000 });
+    expect(s.pre.changes).toBe('Track bar up 1/4');
+    expect(s.post.laps).toBe('22');
+
+    // a path the app does not know is still refused rather than written blindly
+    expect(sync.applyOp({ p: 'r:s2000:pre:bogus', v: 'x', t: 9000 })).toBe(false);
+  });
 });
 
 describe('per-field merge', () => {

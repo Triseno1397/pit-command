@@ -56,9 +56,9 @@ function mergeDays(current, incoming) {
 /* ---------- per-day CSV: sessions × readings, flat ---------- */
 const CSV_HEAD = [
   'day', 'date', 'track', 'driver', 'car', 'class',
-  'session', 'type', 'reading', 'track_temp',
+  'session', 'type', 'reading', 'track_temp', 'tire_life', 'laps_run',
   ...TIRES.flatMap(k => [`${k}_psi`, `${k}_size`, `${k}_in`, `${k}_mid`, `${k}_out`]),
-  'driver_notes', 'day_notes'
+  'changes_made', 'driver_notes', 'day_notes'
 ];
 
 function cell(v) {
@@ -74,10 +74,14 @@ function dayRows(d, rows) {
         d.name, d.dateISO || d.date, d.track, d.driver, d.car, d.carClass,
         s.name, s.type,
         tab === 'pre' ? 'before (cold)' : 'after (hot)', rd.trackTemp,
+        // tire life is what you rolled out on, laps are what you did — one each
+        tab === 'pre' ? (rd.tireLife || '') : '',
+        tab === 'post' ? (rd.laps || '') : '',
         ...TIRES.flatMap(k => {
           const t = rd.tires[k];
           return [t.psi, t.size, t.ti, t.tm, t.to];
         }),
+        tab === 'pre' ? (rd.changes || '') : '',
         tab === 'pre' ? (s.notes || '') : '',
         tab === 'pre' ? (d.notes || '') : ''
       ]);

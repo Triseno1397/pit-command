@@ -95,10 +95,12 @@ export function analyze(sess, day) {
     return { rear: (rr != null && lr != null) ? rr - lr : null, front: (rf != null && lf != null) ? rf - lf : null }
   };
   const sc = stag(pre), sh = stag(post);
-  A.stagColdRear = sc.rear; A.stagHotRear = sh.rear; A.stagColdFront = sc.front;
+  A.stagColdRear = sc.rear; A.stagHotRear = sh.rear;
+  A.stagColdFront = sc.front; A.stagHotFront = sh.front;
   if (sc.rear != null) met('Rear Stagger (cold)', f2(sc.rear) + '"', 'RR − LR circumference');
   if (sh.rear != null) met('Rear Stagger (hot)', f2(sh.rear) + '"', 'after the run');
   if (sc.front != null) met('Front Stagger (cold)', f2(sc.front) + '"', 'RF − LF');
+  if (sh.front != null) met('Front Stagger (hot)', f2(sh.front) + '"', 'RF − LF, after the run');
   if (sc.rear != null && sh.rear != null) {
     const d = sh.rear - sc.rear;
     if (Math.abs(d) >= 0.5) push('info', 'Stagger moved ' + (d > 0 ? '+' : '') + f2(d) + '" hot',
@@ -115,9 +117,16 @@ export function analyze(sess, day) {
       `Peak average is only ${f1(hotV)}°F. Green track, short run, or pressures too high. Take the reading with a grain of salt — cold tires lie.`);
   }
 
+  /* Run context, from the boxes beside the track temp. Laps and tire life are
+     what tell you whether a soft temperature reading is a chassis problem or
+     just a three-lap run on tires with a season on them. */
+  if ((post.laps || '').trim()) met('Laps Run', String(post.laps).trim(), 'this session');
+  if ((pre.tireLife || '').trim()) met('Tire Life', String(pre.tireLife).trim(), 'on these tires');
+
+  /* Track temp is read cold and carries to the hot sheet, so either side is the
+     same number — but read post first, in case a crew corrected it after the run. */
   const idx = day ? day.sessions.findIndex(s => s.id === sess.id) : -1;
   const tNow = num(post.trackTemp) ?? num(pre.trackTemp);
-  if (tNow != null) met('Track Temp', f1(tNow) + '°F', '');
   if (day && idx > 0 && tNow != null) {
     for (let i = idx - 1; i >= 0; i--) {
       const prev = day.sessions[i];

@@ -39,6 +39,10 @@ export const SHARED_CODE =
 const DAY_FIELDS = ['name', 'track', 'dateISO', 'date', 'driver', 'car', 'carClass', 'notes'];
 const SESS_FIELDS = ['type', 'name', 'notes'];
 const TIRE_FIELDS = ['psi', 'size', 'ti', 'tm', 'to'];
+/* Reading-level fields, wire code -> state field. The codes are short because
+   every one of them is a map key on every session on every sync, and `tt` is
+   already in the wild — renaming it would orphan every phone's merge state. */
+const READING_FIELDS = { tt: 'trackTemp', life: 'tireLife', laps: 'laps', chg: 'changes' };
 
 /* Crockford-ish: no I, L, O, 0, 1 — these get read aloud across a loud pit box
    and written on tape. 8 symbols from a 32-char alphabet is ~40 bits, which is
@@ -95,7 +99,10 @@ export function flatten(st) {
       SESS_FIELDS.forEach(f => { out[`s:${s.id}:${f}`] = s[f] == null ? '' : s[f] });
       ['pre', 'post'].forEach(tab => {
         const r = s[tab] || blankReading();
-        out[`r:${s.id}:${tab}:tt`] = r.trackTemp == null ? '' : r.trackTemp;
+        Object.keys(READING_FIELDS).forEach(code => {
+          const v = r[READING_FIELDS[code]];
+          out[`r:${s.id}:${tab}:${code}`] = v == null ? '' : v;
+        });
         TIRES.forEach(k => {
           const t = (r.tires && r.tires[k]) || {};
           TIRE_FIELDS.forEach(f => {
@@ -180,7 +187,12 @@ export function applyOp(op) {
     if (tab !== 'pre' && tab !== 'post') return false;
     const f = findSess(id); if (!f) return false;
     const r = f.s[tab] || (f.s[tab] = blankReading());
-    if (parts[3] === 'tt') { r.trackTemp = op.v === null ? '' : op.v; return true }
+    // four parts is a reading-level field; five is a corner
+    if (parts.length === 4) {
+      const rf = READING_FIELDS[parts[3]];
+      if (!rf) return false;
+      r[rf] = op.v === null ? '' : op.v; return true;
+    }
     const [, , , tire, field] = parts;
     if (!TIRES.includes(tire) || !TIRE_FIELDS.includes(field)) return false;
     if (!r.tires) r.tires = blankReading().tires;

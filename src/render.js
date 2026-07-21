@@ -1,6 +1,6 @@
 import { state, view, setView, curDay, findS, disarmDelete, saveStatus, onStatus } from './state.js';
 import { hubHTML } from './ui/hub.js';
-import { dayHTML, overviewHTML } from './ui/day.js';
+import { dayHTML, overviewHTML, addBarHTML } from './ui/day.js';
 import { summaryHTML } from './ui/summary.js';
 import { analysisHTML } from './ui/analysis.js';
 import { esc } from './ui/esc.js';
@@ -76,8 +76,9 @@ export function render() {
     app.innerHTML = hubHTML();
   }
   else if (view.page === 'day') {
-    bar.style.display = 'flex';
     const d = curDay(); if (!d) { go({ page: 'hub' }); return }
+    bar.style.display = 'flex';
+    bar.innerHTML = addBarHTML(d);
     meta.innerHTML = `${allDaysBtn}<span id="saveSlot">${saveButtonHTML()}</span>`;
     app.innerHTML = dayHTML(d);
   }

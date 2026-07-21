@@ -4,9 +4,10 @@
 
 Race day tire data console for a Limited Late Model crew chief. Asphalt, left turns only.
 
-Installable offline-first PWA. Log cold and hot readings for all four corners, and it
-reads the tires back at you: tight/loose balance call, inflation and camber flags,
-pressure-gain and leak detection, stagger growth, and a full-day summary with charts.
+Installable offline-first PWA. Log cold and hot readings for all four corners — plus what you
+changed, what the tires had on them, and how many laps you ran — and it reads the tires back at
+you: tight/loose balance call, inflation and camber flags, pressure-gain and leak detection,
+stagger growth, and a full-day summary with charts.
 
 Everything except Smart Fill works with zero connection — race tracks have dead cell
 service, so the whole app shell is precached and all data lives on-device in IndexedDB.
@@ -151,6 +152,22 @@ test/                    vitest
 ```
 
 ### Notes on a few decisions
+
+**What each sheet asks for.** The two tabs are not the same form twice. Tread temps are
+pyrometered as the car comes off the track and never before it, so the **cold** sheet takes
+pressures and sizes only — plus **Changes Made** (what was turned since the last run, written
+at the top because it is the reason the numbers below differ from last time) and **Tire Life**
+(what you rolled out on). The **hot** sheet adds the three-point temps and **Laps Run**. Track
+temp is read once, cold, and carries itself onto the hot sheet rather than being keyed in twice
+from memory an hour later; correcting the hot box afterwards stays a hot-only edit. Smart Fill
+follows the same rule and drops any temperature it hears while the cold sheet is open, since
+there is no box there for the crew to see it in and correct.
+
+**What a race day can hold.** Practice runs all afternoon, qualifying happens once, and the
+night ends in one main or two. The add bar is built per day and greys out a type the day has
+already used up — a stray fifth "Main" is always a mis-tap, and it quietly skews every
+day-level average that follows it. Re-typing an existing card and duplicating one are held to
+the same limits.
 
 **Storage.** `idb-keyval` under the key `lltool:state:v2`, same shape as before, with a
 debounced 700 ms autosave. On first load it also migrates a v1 single-event payload or a

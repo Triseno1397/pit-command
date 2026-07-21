@@ -143,19 +143,30 @@ input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-vis
   letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:3px solid transparent;border-radius:0}
 .rw-tabs button.on{color:var(--text);border-bottom-color:var(--chalk);background:rgba(255,212,71,.05)}
 .rw-body{padding:12px}
-.tt-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+/* The run's context: track temp plus the one box that belongs to this sheet —
+   tire life going out, laps run coming back. The hint drops to its own line so
+   three items never crush each other on a phone. */
+.tt-row{display:flex;align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.tt-fld{display:flex;flex-direction:column;gap:3px;min-width:0}
 .tt-row label{font-family:var(--disp);font-weight:700;font-size:.8rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--dim)}
 .tt-row input{width:104px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
   padding:9px;font-family:var(--mono);text-align:center}
-.tt-row .hint{font-size:.7rem;color:var(--dim)}
+/* Tire life is words ("2 runs", "new"), not a reading — it needs more room than
+   the numeric boxes beside it. */
+.tt-fld.wide input{width:150px;text-align:left}
+.tt-row .hint{font-size:.7rem;color:var(--dim);flex-basis:100%}
 
-/* driver notes */
+/* driver notes, and what was turned before the run */
 .notes{margin-bottom:12px}
 .notes label{display:block;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
   margin-bottom:4px;font-weight:600}
 .notes textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
   padding:9px;min-height:52px;resize:vertical;line-height:1.4}
+/* Changes Made leads the cold sheet — it is the reason the numbers under it
+   differ from last run, so it reads as a heading rather than an afterthought. */
+.notes.changes label{color:var(--chalk)}
+.notes.changes textarea{border-left:3px solid rgba(255,212,71,.45);min-height:46px}
 
 /* ---------- smart fill ----------
    Two ways in (talk, photo), one scratch pad, one unmistakable way out. */
@@ -291,11 +302,13 @@ table.sumtbl td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:
 table.sumtbl td:first-child,table.sumtbl th:first-child{font-family:var(--disp);font-weight:700;letter-spacing:.06em}
 table.sumtbl tr:last-child td{border-bottom:none}
 .tblscroll{overflow-x:auto}
+.tblscroll+.tblscroll{margin-top:14px}
 .pos{color:var(--good)}.neg{color:var(--loose)}
 .sum-note{font-size:.78rem;color:var(--dim);line-height:1.5;margin-top:8px}
 .notecard{background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--chalk);
   border-radius:6px;padding:9px 10px;margin-bottom:6px;font-size:.86rem;line-height:1.45}
 .notecard b{font-family:var(--disp);letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.notecard .nc-chg{display:block;color:var(--chalk);font-size:.8rem;margin:2px 0 3px}
 
 /* add session bar */
 .add-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(0deg,#0C0F13,#0C0F13E8);
@@ -305,6 +318,11 @@ table.sumtbl tr:last-child td{border-bottom:none}
   text-transform:uppercase;padding:11px 14px;border-radius:5px;border:1px solid var(--line2);background:var(--panel2)}
 .add-bar button.main{background:var(--chalk);color:#111;border-color:var(--chalk)}
 .add-bar button:active{transform:translateY(1px)}
+/* A type the day has already used up. Left in place rather than hidden, so the
+   bar does not reshuffle under a thumb reaching for the button next to it. */
+.add-bar button.off{opacity:.35;cursor:not-allowed;background:transparent;color:var(--dim);
+  border-color:var(--line)}
+.add-bar button.off:active{transform:none}
 
 /* ---------- modal (backups & storage) ---------- */
 .modal-back{position:fixed;inset:0;z-index:70;background:rgba(8,10,13,.78);backdrop-filter:blur(3px);

@@ -16,7 +16,8 @@ import {
   state, activeTab, dictDraft, blankReading,
   newDay, newSession, curDay, findS, loadState, queueSave,
   setView, armDelete, disarmDelete, pendingDel, installLifecycleFlush,
-  saveNow, restoreSnapshot, pushSnapshot, ensurePersistentStorage, isoToDisplay
+  saveNow, restoreSnapshot, pushSnapshot, ensurePersistentStorage, isoToDisplay,
+  canAddSession, limitReason
 } from './state.js';
 import { go, render, refreshSession, toast, startSaveTicker, openModal, closeModal } from './render.js';
 import { hooks } from './hooks.js';
@@ -94,6 +95,8 @@ function revealCard(selector) {
 
 window.addSession = t => {
   const d = curDay(); if (!d) return;
+  // The bar already greys these out; this is the backstop for a stale screen.
+  if (!canAddSession(d, t)) { toast(limitReason(t), true); return }
   d.sessions.push(newSession(t, d)); queueSave(); render();
   revealCard('.sess:last-of-type');
 };
@@ -103,6 +106,7 @@ window.addSession = t => {
 window.dupSession = id => {
   const d = curDay(); if (!d) return;
   const src = findS(id); if (!src) return;
+  if (!canAddSession(d, src.type)) { toast(limitReason(src.type), true); return }
   const copy = newSession(src.type, d);
   copy.name = src.name + ' copy';
   copy.pre = JSON.parse(JSON.stringify(src.pre));
@@ -129,6 +133,10 @@ window.setTab = (id, t) => { activeTab[id] = t; render() };
 
 window.updS = (id, f, v) => {
   const s = findS(id); if (!s) return;
+  if (f === 'type' && v !== s.type && !canAddSession(curDay(), v, id)) {
+    // render() puts the select back on the type the session actually is
+    toast(limitReason(v), true); render(); return;
+  }
   s[f] = v; queueSave();
   if (f === 'type') render(); else refreshSession(id);
 };
@@ -138,9 +146,21 @@ window.updT = (id, tab, tire, f, v) => {
   s[tab].tires[tire][f] = v; queueSave(); refreshSession(id);
 };
 
+/** Track temp is read once, off the cold sheet, and stands for the run — so it
+ *  lands on the hot sheet too rather than making someone key the same number in
+ *  twice from memory an hour later. Only cold pushes; correcting the hot box
+ *  afterwards stays a hot-only edit. */
 window.updTT = (id, tab, v) => {
   const s = findS(id); if (!s) return;
-  s[tab].trackTemp = v; queueSave(); refreshSession(id);
+  s[tab].trackTemp = v;
+  if (tab === 'pre') s.post.trackTemp = v;
+  queueSave(); refreshSession(id);
+};
+
+/** Reading-level boxes that aren't a corner: Changes Made, Tire Life, Laps Run. */
+window.updRd = (id, tab, f, v) => {
+  const s = findS(id); if (!s) return;
+  s[tab][f] = v; queueSave(); refreshSession(id);
 };
 
 window.saveDraft = (id, v) => { dictDraft[id] = v };

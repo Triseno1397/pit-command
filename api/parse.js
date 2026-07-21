@@ -100,6 +100,12 @@ export function normalize(raw) {
 export function buildContent(body) {
   const { text, imageBase64, mediaType, tab } = body || {};
   const which = tab === 'post' ? 'after session (hot)' : 'before session (cold)';
+  /* Tread temps are pyrometered as the car comes off the track and never before
+     it, so on a cold sheet a three-digit "temperature" is almost always a misread
+     size or a number from a neighbouring column. Say so, and the client drops any
+     temp that slips through anyway. */
+  const rule = tab === 'post' ? ''
+    : ' Cold readings never include tread temperatures — record only psi and size, and omit ti/tm/to entirely.';
 
   if (imageBase64) {
     if (typeof imageBase64 !== 'string') return { status: 400, error: 'Bad image payload.' };
@@ -113,7 +119,7 @@ export function buildContent(body) {
     return {
       content: [
         { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-        { type: 'text', text: `Extract the tire data from this photo of a tire sheet / notes. This fills the "${which}" reading.` }
+        { type: 'text', text: `Extract the tire data from this photo of a tire sheet / notes. This fills the "${which}" reading.${rule}` }
       ]
     };
   }
@@ -122,7 +128,7 @@ export function buildContent(body) {
     return {
       content: [{
         type: 'text',
-        text: `Parse this dictated/typed tire data. Fills the "${which}" reading:\n\n${text.slice(0, MAX_TEXT_CHARS)}`
+        text: `Parse this dictated/typed tire data. Fills the "${which}" reading.${rule}\n\n${text.slice(0, MAX_TEXT_CHARS)}`
       }]
     };
   }

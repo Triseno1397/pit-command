@@ -45,16 +45,46 @@ function notify() { statusListeners.forEach(f => { try { f() } catch (e) { } }) 
 export function setView(v) { view = v }
 export function setPendingDel(v) { pendingDel = v }
 
+/* Fields that hang off a reading rather than a corner. `changes` and `tireLife`
+   are only ever filled cold, `laps` only ever hot, but they all live on both
+   readings so the shape stays one thing to normalize, sync, and export. */
 export function blankReading() {
   const t = {}; TIRES.forEach(k => t[k] = { psi: '', size: '', ti: '', tm: '', to: '' });
-  return { trackTemp: '', tires: t };
+  return { trackTemp: '', tireLife: '', laps: '', changes: '', tires: t };
+}
+export const READING_TEXT_FIELDS = ['trackTemp', 'tireLife', 'laps', 'changes'];
+
+/* How many of each session a race day can hold. Practice runs all afternoon;
+   there is exactly one qualifying run, and the night ends in either one main or
+   two. Anything beyond that is a mis-tap, and a stray extra "Main" quietly
+   poisons every day-level average that follows it. */
+export const SESSION_LIMITS = { Practice: Infinity, Qualifying: 1, Main: 2 };
+export const SESSION_TYPES = ['Practice', 'Qualifying', 'Main'];
+
+/** `exceptId` excludes a session from its own count, so re-typing a card as the
+ *  thing it already is never reads as one over the limit. */
+export function countType(day, type, exceptId) {
+  if (!day || !day.sessions) return 0;
+  return day.sessions.filter(s => s.type === type && s.id !== exceptId).length;
+}
+
+export function canAddSession(day, type, exceptId) {
+  const cap = SESSION_LIMITS[type];
+  return countType(day, type, exceptId) < (cap == null ? Infinity : cap);
+}
+
+/** Why a type is unavailable, in the words the crew would use. */
+export function limitReason(type) {
+  if (SESSION_LIMITS[type] === 1) return 'An event only runs one ' + type.toLowerCase() + ' session.';
+  return `An event runs one or two ${type.toLowerCase()}s — both are already on the sheet.`;
 }
 
 export function newSession(type, day) {
-  const n = day.sessions.filter(s => s.type === type).length + 1;
+  const n = countType(day, type) + 1;
   return {
     id: 's' + Date.now() + Math.floor(Math.random() * 999), type,
-    name: type + (type === 'Main' ? '' : ' ' + n), notes: '',
+    // A single-session type needs no number after it; the ones that repeat do.
+    name: SESSION_LIMITS[type] === 1 ? type : type + ' ' + n, notes: '',
     pre: blankReading(), post: blankReading()
   };
 }
@@ -240,7 +270,9 @@ export function normalize(s) {
       if (typeof ss.notes !== 'string') ss.notes = '';
       ['pre', 'post'].forEach(tab => {
         if (!ss[tab]) ss[tab] = blankReading();
-        if (typeof ss[tab].trackTemp !== 'string') ss[tab].trackTemp = ss[tab].trackTemp == null ? '' : String(ss[tab].trackTemp);
+        READING_TEXT_FIELDS.forEach(f => {
+          if (typeof ss[tab][f] !== 'string') ss[tab][f] = ss[tab][f] == null ? '' : String(ss[tab][f]);
+        });
         ss[tab].tires = ss[tab].tires || {};
         TIRES.forEach(k => {
           const t = ss[tab].tires[k] || {};

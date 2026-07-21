@@ -1,6 +1,9 @@
 import { TIRE_NAMES, num, f1 } from '../num.js';
 import { analyze } from '../analyze.js';
-import { activeTab, pendingDel, smartBusy, smartMsg, dictDraft } from '../state.js';
+import {
+  activeTab, pendingDel, smartBusy, smartMsg, dictDraft,
+  SESSION_TYPES, canAddSession, limitReason
+} from '../state.js';
 import { canSmartFill, speechSupported, isListening } from '../smartfill.js';
 import { devKey, needsKey } from '../devkey.js';
 import { analysisHTML } from './analysis.js';
@@ -75,6 +78,20 @@ function dayDetailsHTML(d) {
   </section>`;
 }
 
+/* The bar is built per day rather than baked into the shell, because what a day
+   can still take depends on what is already on it: practice runs all afternoon,
+   qualifying happens once, and the night ends in one main or two. A button that
+   would break that is greyed out and says why, rather than silently accepting a
+   fifth "Main" that then skews every day-level average. */
+export function addBarHTML(d) {
+  return SESSION_TYPES.map(t => {
+    const ok = canAddSession(d, t);
+    const main = t === 'Practice' ? ' main' : '';
+    return `<button class="${main.trim()}${ok ? '' : ' off'}" ${ok ? '' : 'disabled'}
+      title="${ok ? '' : esc(limitReason(t))}" onclick="addSession('${t}')">+ ${t}</button>`;
+  }).join('');
+}
+
 export function dayHTML(d) {
   let h = dayDetailsHTML(d);
   h += `<div class="overview" id="overview">${overviewHTML(d)}</div>`;
@@ -89,7 +106,8 @@ export function dayHTML(d) {
         <span class="sess-num">S${i + 1}</span>
         <input class="sname" value="${esc(s.name)}" onchange="updS('${s.id}','name',this.value)">
         <select onchange="updS('${s.id}','type',this.value)">
-          ${['Practice', 'Qualifying', 'Main'].map(t => `<option ${s.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+          ${SESSION_TYPES.map(t => `<option ${s.type === t ? 'selected' : ''}
+            ${canAddSession(d, t, s.id) ? '' : 'disabled'}>${t}</option>`).join('')}
         </select>
         <div class="sess-actions">
           <button class="del-btn" onclick="dupSession('${s.id}')">Duplicate</button>
@@ -171,7 +189,9 @@ export function smartHTML(s, tab) {
     <textarea id="dict-${s.id}" rows="3"
       oninput="saveDraft('${s.id}',this.value)"
       onkeydown="draftKey(event,'${s.id}')"
-      placeholder="…or type it: “Track temp 118. Right front 24 and a half psi, 88 and a quarter, temps 210 195 180.”">${esc(draft)}</textarea>
+      placeholder="${tab === 'pre'
+      ? '…or type it: “Track temp 118. Right front 24 and a half psi, 88 and a quarter.”'
+      : '…or type it: “Right front 28 psi, 88 and a half, temps 210 195 180.”'}">${esc(draft)}</textarea>
 
     <div class="sf-submit">
       <button class="sf-go" ${(!hasText || busy || !online) ? 'disabled' : ''} onclick="smartText('${s.id}')">
@@ -191,18 +211,13 @@ export function smartHTML(s, tab) {
 
 export function readingHTML(s, tab) {
   const rd = s[tab];
+  /* Tread temps are only ever pyrometered as the car comes off the track — a
+     cold tire has nothing to say. So the cold sheet is pressures and sizes, and
+     the three temp boxes exist on the hot sheet only. */
+  const hot = tab === 'post';
   const tireBox = k => {
     const t = rd.tires[k];
-    return `
-    <div class="tirebox">
-      <h4>${k}<span>${TIRE_NAMES[k]}</span></h4>
-      <div class="fields">
-        <div class="fld"><label>Pressure psi</label>
-          <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.psi)}" placeholder="—"
-            onchange="updT('${s.id}','${tab}','${k}','psi',this.value)"></div>
-        <div class="fld"><label>Size / rollout in</label>
-          <input type="text" autocomplete="off" value="${esc(t.size)}" placeholder="e.g. 88 1/4"
-            onchange="updT('${s.id}','${tab}','${k}','size',this.value)"></div>
+    const temps = hot ? `
         <div class="tempslab">Tire Temps °F</div>
         <div class="fields temps3" style="grid-column:1/-1">
           <div class="fld"><label>Inside</label>
@@ -214,15 +229,51 @@ export function readingHTML(s, tab) {
           <div class="fld"><label>Outside</label>
             <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.to)}" placeholder="—"
               onchange="updT('${s.id}','${tab}','${k}','to',this.value)"></div>
-        </div>
+        </div>` : '';
+    return `
+    <div class="tirebox">
+      <h4>${k}<span>${TIRE_NAMES[k]}</span></h4>
+      <div class="fields">
+        <div class="fld"><label>Pressure psi</label>
+          <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.psi)}" placeholder="—"
+            onchange="updT('${s.id}','${tab}','${k}','psi',this.value)"></div>
+        <div class="fld"><label>Size / rollout in</label>
+          <input type="text" autocomplete="off" value="${esc(t.size)}" placeholder="e.g. 88 1/4"
+            onchange="updT('${s.id}','${tab}','${k}','size',this.value)"></div>${temps}
       </div>
     </div>`
   };
-  return `
-    <div class="tt-row"><label>Track Temp °F</label>
-      <input type="text" inputmode="decimal" autocomplete="off" value="${esc(rd.trackTemp)}" placeholder="—"
-        onchange="updTT('${s.id}','${tab}',this.value)">
-      <span class="hint">${tab === 'pre' ? 'taken before the session' : 'taken right after the run'}</span>
+
+  /* What was turned since the last run, written down before the run rather than
+     remembered after it. It sits above the readings because it is the reason the
+     next set of numbers looks different from the last set. */
+  const changes = hot ? '' : `
+    <div class="notes changes">
+      <label for="chg-${s.id}">Changes Made</label>
+      <textarea id="chg-${s.id}" placeholder="What was turned since the last run: air, wedge, track bar, springs, stagger, tires."
+        onchange="updRd('${s.id}','pre','changes',this.value)">${esc(rd.changes || '')}</textarea>
+    </div>`;
+
+  /* Tire life belongs to the cold sheet (it is what you rolled out on) and laps
+     run to the hot one (it is what you did). Both sit beside the track temp
+     because all three are the context every reading below has to be read in. */
+  const second = hot
+    ? `<div class="tt-fld"><label>Laps Run</label>
+        <input type="text" inputmode="numeric" autocomplete="off" value="${esc(rd.laps || '')}" placeholder="—"
+          onchange="updRd('${s.id}','post','laps',this.value)"></div>`
+    : `<div class="tt-fld wide"><label>Tire Life</label>
+        <input type="text" autocomplete="off" value="${esc(rd.tireLife || '')}" placeholder="e.g. 2 runs"
+          onchange="updRd('${s.id}','pre','tireLife',this.value)"></div>`;
+
+  return `${changes}
+    <div class="tt-row">
+      <div class="tt-fld"><label>Track Temp °F</label>
+        <input type="text" inputmode="decimal" autocomplete="off" value="${esc(rd.trackTemp)}" placeholder="—"
+          onchange="updTT('${s.id}','${tab}',this.value)"></div>
+      ${second}
+      <span class="hint">${hot
+      ? 'track temp carried over from the cold sheet — laps are what the run actually was'
+      : 'read the track once, cold; it carries straight to the hot sheet'}</span>
     </div>
     <div class="tires">${tireBox('LF')}${tireBox('RF')}${tireBox('LR')}${tireBox('RR')}</div>`;
 }

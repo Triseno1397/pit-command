@@ -72,29 +72,46 @@ export function summaryHTML(d) {
   });
   h += `</table></div><div class="sum-note">Gain and growth are hot minus cold, averaged across every session with both readings.</div></div>`;
 
-  /* size differentials per session */
+  /* size & stagger — same by-corner shape as the day averages above, and
+     deliberately sizes only: pressures and temps have their own table and
+     repeating them here just buries the one number this section is about. */
+  const inches = v => v == null ? '—' : f2(v) + '"';
   h += `<div class="sum-sec"><h3>Size &amp; Stagger Detail</h3><div class="tblscroll"><table class="sumtbl">
-    <tr><th>Session</th><th>Rear Stag Cold</th><th>Rear Stag Hot</th><th>Δ Stagger</th><th>Front Stag Cold</th>
-    <th>LF Δ</th><th>RF Δ</th><th>LR Δ</th><th>RR Δ</th></tr>`;
-  S.forEach((s, i) => {
-    const A = AA[i];
-    const dstag = (A.stagColdRear != null && A.stagHotRear != null) ? A.stagHotRear - A.stagColdRear : null;
-    h += `<tr><td>${esc(s.name)}</td>
-      <td>${A.stagColdRear != null ? f2(A.stagColdRear) + '"' : '—'}</td>
-      <td>${A.stagHotRear != null ? f2(A.stagHotRear) + '"' : '—'}</td>
-      ${cellNum(dstag, '"', true)}
-      <td>${A.stagColdFront != null ? f2(A.stagColdFront) + '"' : '—'}</td>
-      ${cellNum(A.growth.LF, '"', true)}${cellNum(A.growth.RF, '"', true)}
-      ${cellNum(A.growth.LR, '"', true)}${cellNum(A.growth.RR, '"', true)}</tr>`;
+    <tr><th>Tire</th><th>Avg Cold Size</th><th>Avg Hot Size</th><th>Avg Growth</th></tr>`;
+  TIRES.forEach(k => {
+    const cold = avgOf(S.map(s => num(s.pre.tires[k].size)));
+    const hot = avgOf(S.map(s => num(s.post.tires[k].size)));
+    h += `<tr><td style="color:${TIRE_COLORS[k]}">${k}</td>
+      <td>${inches(cold)}</td><td>${inches(hot)}</td>
+      ${cellNum(avgOf(AA.map(A => A.growth[k])), '"', true)}</tr>`;
   });
-  h += `</table></div><div class="sum-note">Tire Δ columns are individual size growth hot vs cold. A RR that keeps growing frees the car late in runs; a corner that shrinks is losing air.</div></div>`;
+  h += `</table></div>`;
 
-  /* driver notes of the day */
-  const noted = S.filter(s => (s.notes || '').trim());
+  h += `<div class="tblscroll"><table class="sumtbl">
+    <tr><th>Stagger</th><th>Avg Cold</th><th>Avg Hot</th><th>Avg Change</th></tr>`;
+  [['Rear', 'stagColdRear', 'stagHotRear'], ['Front', 'stagColdFront', 'stagHotFront']].forEach(([label, ck, hk]) => {
+    const cold = avgOf(AA.map(A => A[ck]));
+    const hot = avgOf(AA.map(A => A[hk]));
+    const moved = avgOf(AA.map(A => (A[ck] != null && A[hk] != null) ? A[hk] - A[ck] : null));
+    h += `<tr><td>${label}</td><td>${inches(cold)}</td><td>${inches(hot)}</td>
+      ${cellNum(moved, '"', true)}</tr>`;
+  });
+  h += `</table></div><div class="sum-note">Growth is hot minus cold on that corner, averaged across every session with both readings. A RR that keeps growing frees the car late in runs; a corner that shrinks is losing air. Set cold stagger so the hot number lands on your target for the Main — that is the one the car actually races on.</div></div>`;
+
+  /* driver notes of the day, each against what was turned before that run —
+     a note about the car being free means nothing without the change that
+     preceded it */
+  const noted = S.filter(s => (s.notes || '').trim() || (s.pre.changes || '').trim());
   if (noted.length) {
-    h += `<div class="sum-sec"><h3>Driver Notes</h3>`;
-    noted.forEach(s => { h += `<div class="notecard"><b>${esc(s.name)}.</b> ${esc(s.notes.trim())}</div>` });
-    h += `<div class="sum-note">What the driver felt, next to what the tires measured. When the two disagree, believe the tires and ask again.</div></div>`;
+    h += `<div class="sum-sec"><h3>Driver Notes &amp; Changes Made</h3>`;
+    noted.forEach(s => {
+      const chg = (s.pre.changes || '').trim();
+      const note = (s.notes || '').trim();
+      h += `<div class="notecard"><b>${esc(s.name)}.</b>
+        ${chg ? `<span class="nc-chg">Changed: ${esc(chg)}</span>` : ''}
+        ${note ? esc(note) : ''}</div>`;
+    });
+    h += `<div class="sum-note">What was turned, then what the driver felt, next to what the tires measured. When the note and the temps disagree, believe the tires and ask again.</div></div>`;
   }
 
   /* all flags of the day */
