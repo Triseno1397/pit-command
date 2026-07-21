@@ -5,6 +5,7 @@
 
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { TIRES } from './num.js';
+import { hooks } from './hooks.js';
 
 const KEY = 'lltool:state:v2';
 const LEGACY_KEY = 'lltool:state';
@@ -115,6 +116,7 @@ export async function saveState() {
 /** Any edit. Marks the work unsaved and starts the safety-net autosave. */
 export function queueSave() {
   dirty = true; notify();
+  try { hooks.changed() } catch (e) { /* sync must never block an edit */ }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { saveTimer = null; autoSave() }, 700);
 }

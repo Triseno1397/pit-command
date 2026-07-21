@@ -1,13 +1,17 @@
 import { state, pendingDel } from '../state.js';
 import { analyze } from '../analyze.js';
 import { esc } from './esc.js';
+import { crew } from '../sync.js';
+import { crewStatusLine } from './crew.js';
 
 export function hubHTML() {
   let h = `<div class="hub-hd"><h1>Race Days</h1><p>Every event, every session, saved. Tap a day to open it.</p>
     <div class="hub-tools">
+      <button class="mini-btn" onclick="openCrew()">${crew.code ? 'Crew ' + esc(crew.code) : 'Crew'}</button>
       <button class="mini-btn" onclick="openBackups()">Backups</button>
       <button class="sum-btn" onclick="addDay()">+ New Race Day</button>
-    </div></div>`;
+    </div>
+    ${crew.code ? `<div class="hub-crew">${esc(crewStatusLine())}</div>` : ''}</div>`;
   if (!state.days.length)
     return h + `<div class="zero"><h2>Nothing in the trailer yet.</h2>
       <p>Start a new race day above. Each day holds its own sessions, readings, and summary — so you can flip back through the season and compare notes track to track.</p></div>`;

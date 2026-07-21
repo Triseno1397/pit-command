@@ -3,5 +3,8 @@
 export const hooks = {
   render: () => { },
   refreshSession: () => { },
-  toast: () => { }
+  toast: () => { },
+  /* Fired by queueSave() on every edit. Crew sync listens here rather than at
+     each mutation site, so a site added later cannot forget to report itself. */
+  changed: () => { }
 };

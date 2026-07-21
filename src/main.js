@@ -23,6 +23,8 @@ import { hooks } from './hooks.js';
 import { smartPhoto, smartText, toggleDictate, stopDictate, clearDraft } from './smartfill.js';
 import { exportJSON, importJSON, exportCSV, exportAllCSV } from './exportimport.js';
 import { backupsHTML } from './ui/backups.js';
+import { crewHTML } from './ui/crew.js';
+import { crew, loadCrew, joinCrew, leaveCrew, syncNow, startAutoSync, makeCode, validCode, onSync } from './sync.js';
 import { checkDevKey, saveDevKey } from './devkey.js';
 
 hooks.render = render;
@@ -159,6 +161,48 @@ window.restorePoint = async ts => {
   else toast('Could not restore that point.', true);
 };
 
+/* ---------- crew ---------- */
+window.openCrew = () => { openModal('<div class="modal-hd"><h3>Crew</h3></div>' + crewHTML()) };
+
+function repaintCrew() {
+  const card = document.querySelector('.modal-card');
+  if (card && document.getElementById('modal').style.display !== 'none') {
+    card.innerHTML = crewHTML();
+  }
+}
+
+window.crewCreate = async () => {
+  const code = makeCode();
+  const r = await joinCrew(code);
+  repaintCrew();
+  if (r.ok) toast('Crew ' + code + ' started. Read that code to the rest of the crew.');
+  else toast(r.error || 'Could not start the crew.', true);
+};
+
+window.crewJoin = async () => {
+  const el = document.getElementById('crew-input');
+  const raw = el ? el.value.trim().toUpperCase() : '';
+  if (!validCode(raw)) { toast('That code should look like ABCD-2345.', true); return }
+  const r = await joinCrew(raw);
+  repaintCrew(); render();
+  if (r.ok) toast('Joined crew ' + raw + '.');
+  else toast(r.error || 'Could not reach that crew.', true);
+};
+
+window.crewKey = e => { if (e.key === 'Enter') { e.preventDefault(); window.crewJoin() } };
+
+window.crewSync = async () => {
+  const ok = await syncNow();
+  repaintCrew();
+  toast(ok ? 'Synced.' : (crew.error || 'Could not sync.'), !ok);
+};
+
+window.crewLeave = async () => {
+  await leaveCrew();
+  repaintCrew(); render();
+  toast('Left the crew. Everything on this phone stayed put.');
+};
+
 /* Smart Fill availability flips with the radio — repaint the buttons. */
 window.addEventListener('online', () => render());
 window.addEventListener('offline', () => { stopDictate(); render() });
@@ -175,6 +219,16 @@ window.addEventListener('offline', () => { stopDictate(); render() });
 
   // Ask the browser not to evict the season log when the device runs low on space.
   ensurePersistentStorage();
+
+  /* Crew sync. Loaded after the local state so a shared log never renders before
+     the device's own work does — local-first is the whole contract. */
+  await loadCrew();
+  startAutoSync();
+  /* Only the crew panel repaints on sync status. A full render here would tear
+     down whatever input the crew is tabbing through and drop focus mid-reading —
+     the same failure the targeted-refresh work exists to prevent. */
+  onSync(repaintCrew);
+  if (crew.code) syncNow({ silent: true });
   // Local dev with no API key yet? Offer the one-time Smart Fill setup in the app.
   checkDevKey();
   // A restore point from before this session's edits, so today can always be undone.
