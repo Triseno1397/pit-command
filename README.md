@@ -1,5 +1,7 @@
 # Pit Command
 
+**Live: https://pit-command.vercel.app** — open it on your phone and add it to your home screen.
+
 Race day tire data console for a Limited Late Model crew chief. Asphalt, left turns only.
 
 Installable offline-first PWA. Log cold and hot readings for all four corners, and it
@@ -8,6 +10,27 @@ pressure-gain and leak detection, stagger growth, and a full-day summary with ch
 
 Everything except Smart Fill works with zero connection — race tracks have dead cell
 service, so the whole app shell is precached and all data lives on-device in IndexedDB.
+
+## Install it on your phone
+
+It is a PWA, so there is no app store and no account. Open
+**https://pit-command.vercel.app** and add it — after that it launches fullscreen from your home
+screen and runs with no signal.
+
+- **iPhone / iPad** — open the link in **Safari** (Chrome on iOS cannot install it), tap **Share**,
+  then **Add to Home Screen**.
+- **Android** — open the link in Chrome, tap the **⋮** menu, then **Install app** / **Add to Home
+  screen**.
+
+Do this before you leave for the track. The first load is what caches the app; after that the
+23-file shell is on the device and the only thing that still wants a connection is Smart Fill.
+
+Installing also matters for your data: a home-screen install makes the browser far more likely to
+grant `navigator.storage.persist()`, which is what keeps a logged season from being evicted when the
+phone runs low on space. The **Backups** panel on the hub tells you which mode you are in.
+
+Sharing it is just sharing the link. Everyone gets their own private log — data lives on each
+device, never on a server, and nothing is shared between phones.
 
 ## Running it
 
@@ -34,14 +57,20 @@ unaffected. `npx vercel dev` also works if you want the exact Vercel runtime.
 
 ## Deploying
 
-Vercel, zero config beyond one secret:
+Already deployed: **https://pit-command.vercel.app**, from the private repo
+`Triseno1397/pit-command`. The repo is connected to Vercel, so **pushing to `main` redeploys the
+live site** — there is no manual deploy step.
 
-1. `npx vercel` (or import the repo in the dashboard)
-2. Settings → Environment Variables → `ANTHROPIC_API_KEY`
-3. Deploy. `vercel.json` pins the build command, output directory, and the
-   `api/parse.js` function limits.
+`vercel.json` pins the build command, output directory, and the `api/parse.js` function limits, so
+the only thing that isn't in version control is the secret:
 
-The key is read server-side in `api/parse.js` only. It is never bundled into the client.
+- Vercel → Project → Settings → Environment Variables → `ANTHROPIC_API_KEY` (Production + Preview),
+  then redeploy.
+
+The key is read server-side in `api/parse.js` only. It is never bundled into the client, so it is
+not exposed by the site being public — but note that anyone who has the link can *use* Smart Fill,
+and those calls bill that key. Removing the variable and redeploying is the off switch: Smart Fill
+then reports that it needs a key and every other feature is unaffected.
 
 ## How it's put together
 
@@ -150,12 +179,13 @@ searchable rather than becoming a pile of untitled days.
 
 | # | Check | Status |
 |---|---|---|
-| 1 | `npm run build && npm run preview`; installs to home screen, launches fullscreen | manifest, SW, and icons verified served; **install needs a real device** |
+| 1 | `npm run build && npm run preview`; installs to home screen, launches fullscreen | manifest, SW, and icons verified served on the live deploy (all 200); **the install itself needs a real device** |
 | 2 | Airplane mode: day + sessions + `88 1/4` fractions → analysis and charts; reload persists | covered by `test/app.test.js` + a 22-entry precached shell |
 | 3 | Fronts 20°F hotter than rears → TIGHT with wedge/sway options; post psi < pre psi → red LOST flag | `test/app.test.js`, `test/analyze.test.js` |
-| 4 | Smart Fill photo/dictation fills the active tab; "and a quarter" → .25; offline disabled state | request/response contract covered by `test/parse.test.js`, offline state by `test/app.test.js`; **the live model call needs a deployed key** |
+| 4 | Smart Fill photo/dictation fills the active tab; "and a quarter" → .25; offline disabled state | request/response contract covered by `test/parse.test.js`, offline state by `test/app.test.js`; `/api/parse` is live and answering; **still needs `ANTHROPIC_API_KEY` set in Vercel to exercise the model call** |
 | 5 | Export → wipe → import restores everything | `test/app.test.js` |
 | 6 | Lighthouse PWA installability; no console errors | manifest + SW verified, test run is clean of unhandled errors; **run Lighthouse against the deploy** |
 
-Items 1, 4, and 6 still need a real device or a live deployment to finish signing off —
-the model call in particular has never been exercised end to end.
+The deployment now exists, so what's left is device work: install it on a phone (1), run Lighthouse
+against the live URL (6), and set the API key then run one real Smart Fill (4). The model call has
+still never been exercised end to end.
