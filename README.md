@@ -142,6 +142,15 @@ The original spec named `claude-sonnet-4-6`; that model doesn't support structur
 outputs, so this is the current Sonnet-tier equivalent. It's a single `MODEL` constant
 at the top of the file if you want to change it.
 
+A blank box on a tire sheet is normal, so the obvious schema was `anyOf: [number, null]`
+on every field. That is rejected: structured outputs caps union-typed parameters at 16,
+and four corners × five fields plus track temp is 21. Every request 400'd. The fields are
+optional instead — same meaning, zero unions — and `normalize()` maps an absent key to
+null exactly as it did an explicit one, so nothing downstream changed. Worth knowing
+because the tests mock the SDK: they check the request/response contract but never
+compile the schema, so this failed only against the real API. There's now a test pinning
+the union count under the cap.
+
 **Offline degradation.** Smart Fill buttons disable with a "No signal — manual entry"
 note when `navigator.onLine` is false, and re-enable on the `online` event. Everything
 else keeps working.
@@ -182,10 +191,10 @@ searchable rather than becoming a pile of untitled days.
 | 1 | `npm run build && npm run preview`; installs to home screen, launches fullscreen | manifest, SW, and icons verified served on the live deploy (all 200); **the install itself needs a real device** |
 | 2 | Airplane mode: day + sessions + `88 1/4` fractions → analysis and charts; reload persists | covered by `test/app.test.js` + a 22-entry precached shell |
 | 3 | Fronts 20°F hotter than rears → TIGHT with wedge/sway options; post psi < pre psi → red LOST flag | `test/app.test.js`, `test/analyze.test.js` |
-| 4 | Smart Fill photo/dictation fills the active tab; "and a quarter" → .25; offline disabled state | request/response contract covered by `test/parse.test.js`, offline state by `test/app.test.js`; `/api/parse` is live and answering; **still needs `ANTHROPIC_API_KEY` set in Vercel to exercise the model call** |
+| 4 | Smart Fill photo/dictation fills the active tab; "and a quarter" → .25; offline disabled state | ✅ verified live end to end — a dictated line with a mid-sentence correction, spoken fractions, three bare temps, and crew chatter returned `RF psi 24.5 · size 88.25 · 210/195/180`, `LR psi 18`, `trackTemp 118`, chatter ignored. Contract covered by `test/parse.test.js`, offline state by `test/app.test.js` |
 | 5 | Export → wipe → import restores everything | `test/app.test.js` |
 | 6 | Lighthouse PWA installability; no console errors | manifest + SW verified, test run is clean of unhandled errors; **run Lighthouse against the deploy** |
 
-The deployment now exists, so what's left is device work: install it on a phone (1), run Lighthouse
-against the live URL (6), and set the API key then run one real Smart Fill (4). The model call has
-still never been exercised end to end.
+Item 4 is now signed off — the first real model call surfaced a schema bug that no mocked test could
+have caught (see the Smart Fill model note above). What remains is device work: install it on a
+phone (1) and run Lighthouse against the live URL (6).
