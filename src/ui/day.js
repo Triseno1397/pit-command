@@ -51,15 +51,28 @@ export function deleteDayHTML(d) {
 }
 
 /* The strip below the header: every race day as a quick-switch button (the active
-   one filled, with an orange sub-line), the primary way to start a new one, and
-   the day-level actions. Same actions and labels as before, gathered in one bar. */
+   one filled, with an orange sub-line), the primary way to start a new one, the
+   add-a-session buttons (moved up here from a tile at the end of the board so the
+   main in-day action rides the top bar), and the day-level actions. */
 function dayStripHTML(d) {
   const days = state.days.map(x =>
     `<button class="ds-day${x.id === d.id ? ' on' : ''}" onclick="go({page:'day',dayId:'${x.id}'})">${esc(x.name) || 'Untitled'}</button>`
   ).join('');
+  const addBtns = SESSION_TYPES.map(t => {
+    const ok = canAddSession(d, t);
+    const emph = t === 'Practice' ? ' ds-add-primary' : t === 'Main' ? ' ds-add-ghost' : '';
+    return `<button class="ds-addbtn${emph}${ok ? '' : ' off'}" ${ok ? '' : 'disabled'}
+      title="${ok ? '' : esc(limitReason(t))}" onclick="addSession('${t}')">+ ${t}</button>`;
+  }).join('');
   return `<div class="pc-daystrip">
-    ${days}
-    <button class="sum-btn" onclick="addDay()">+ New Race Day</button>
+    <div class="ds-days">
+      ${days}
+      <button class="sum-btn" onclick="addDay()">+ New Race Day</button>
+    </div>
+    <div class="ds-add">
+      <span class="ds-add-cap">Add session</span>
+      ${addBtns}
+    </div>
     <div class="ds-actions">
       <button class="mini-btn" onclick="toggleDetails('${d.id}')">Day Details</button>
       <button class="mini-btn" onclick="go({page:'summary',dayId:'${d.id}'})">Day Summary</button>
@@ -82,7 +95,6 @@ function dayDetailsHTML(d) {
         ${field('Track', `<input value="${esc(d.track)}" placeholder="e.g. Hickory Motor Speedway" onchange="updDay('track',this.value)">`)}
         ${field('Date', `<input type="date" value="${esc(d.dateISO || '')}" onchange="updDay('dateISO',this.value)">`)}
         ${field('Driver', `<input value="${esc(d.driver)}" placeholder="Driver name" autocomplete="name" onchange="updDay('driver',this.value)">`)}
-        ${field('Car #', `<input value="${esc(d.car)}" placeholder="e.g. 21" inputmode="numeric" onchange="updDay('car',this.value)">`)}
         ${field('Class', `<select onchange="updDay('carClass',this.value)">
           ${CLASSES.map(c => `<option ${d.carClass === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>`)}
@@ -98,10 +110,9 @@ export function dayHTML(d) {
   h += dayDetailsHTML(d);
   if (!d.sessions.length)
     h += `<div class="zero"><h2>Green track. No data yet.</h2>
-      <p>Add your first session below. Log pressures, temps, and tire sizes before and after each run — or snap a photo of your tire sheet and let the console read it.</p></div>`;
+      <p>Add your first session from the <b>Add session</b> buttons up top. Log pressures, temps, and tire sizes before and after each run — or snap a photo of your tire sheet and let the console read it.</p></div>`;
   h += `<div class="pc-board">`;
   d.sessions.forEach((s, i) => { h += cardHTML(s, d, i) });
-  h += addColHTML(d);
   h += `</div>`;
   return h;
 }
@@ -182,21 +193,6 @@ function tireGridHTML(s, hm) {
     </thead>
     <tbody>${TIRES.map(row).join('')}</tbody>
   </table>`;
-}
-
-/* The add-a-session column, last in the board. Same enable/disable rules and the
-   same explanatory title on a type the day has already used up. */
-function addColHTML(d) {
-  const btns = SESSION_TYPES.map(t => {
-    const ok = canAddSession(d, t);
-    const primary = t === 'Practice' ? ' pc-btn--primary' : t === 'Main' ? ' pc-btn--primary pc-btn--ghostwhite' : '';
-    const cls = `pc-btn${primary}${ok ? '' : ' off'}`;
-    return `<button class="${cls}" ${ok ? '' : 'disabled'} title="${ok ? '' : esc(limitReason(t))}" onclick="addSession('${t}')">+ ${t}</button>`;
-  }).join('');
-  return `<div class="pc-addcol">
-    <div class="addcap">Add a session</div>
-    ${btns}
-  </div>`;
 }
 
 export function smartHTML(s, tab) {

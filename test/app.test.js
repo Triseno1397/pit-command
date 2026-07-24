@@ -57,7 +57,7 @@ describe('a race day, start to finish', () => {
     window.addDay();
     expect(app().querySelector('.daydetails')).toBeTruthy();
     // the add-a-session controls live in the board's last column now
-    expect(app().querySelector('.pc-addcol')).toBeTruthy();
+    expect(app().querySelector('.ds-add')).toBeTruthy();
 
     window.addSession('Practice');
     const card = app().querySelector('.sess');
@@ -169,12 +169,13 @@ describe('summary and export', () => {
     // front and rear stagger now live per-session in the size & stagger table
     expect(html).toContain('Front Stagger');
     expect(html).toContain('Rear Stagger');
-    // How the day went sits right under the notes, then size & stagger detail, then
-    // the per-session number tables, with day averages after the pressure gains.
-    expect(html.indexOf('How the Day Went')).toBeLessThan(html.indexOf('Size &amp; Stagger Detail'));
+    // size & stagger detail leads the tables, the per-session number tables follow
+    // with day averages after the pressure gains, and how-the-day-went closes it out.
     expect(html.indexOf('Size &amp; Stagger Detail')).toBeLessThan(html.indexOf('Pressure Gain by Session'));
     expect(html.indexOf('Pressure Gain by Session')).toBeLessThan(html.indexOf('Day Averages by Corner'));
     expect(html.indexOf('Day Averages by Corner')).toBeLessThan(html.indexOf('Average Temps by Session'));
+    expect(html.indexOf('Average Temps by Session')).toBeLessThan(html.indexOf('How the Day Went'));
+    expect(html.indexOf('How the Day Went')).toBeGreaterThan(html.indexOf('Driver Notes'));
     expect(html).toContain('Free on entry.');  // driver notes carried through
   });
 
@@ -447,8 +448,9 @@ describe('Race Day Details', () => {
   it('captures who drove it, what car, and when — all labelled', () => {
     window.addDay();
     const html = app().innerHTML;
-    ['Event', 'Track', 'Date', 'Driver', 'Car #', 'Class', 'Day Notes']
+    ['Event', 'Track', 'Date', 'Driver', 'Class', 'Day Notes']
       .forEach(label => expect(html).toContain(label));
+    expect(html).not.toContain('Car #');   // car number box removed from day details
     expect(html).toContain('type="date"');
   });
 
@@ -696,7 +698,7 @@ describe('the cold sheet and the hot sheet on one grid', () => {
 });
 
 describe('what a race day can hold', () => {
-  const btn = label => [...app().querySelectorAll('.pc-addcol button')].find(b => b.textContent.includes(label));
+  const btn = label => [...app().querySelectorAll('.ds-add button')].find(b => b.textContent.includes(label));
 
   it('runs practice all afternoon', async () => {
     const S = await import('../src/state.js');

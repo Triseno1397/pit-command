@@ -31,19 +31,7 @@ export function summaryHTML(d) {
   const pair = (c, hv) => (c == null && hv == null) ? '—'
     : `${inches(c)}<span class="cell-arrow"> → </span>${inches(hv)}`;
 
-  /* 2 — How the day went sits right under the notes: the whole day's balance,
-     left to right, before any of the number tables. */
-  h += `<div class="sum-sec"><h3>How the Day Went</h3>
-    <div class="chips">`;
-  S.forEach((s, i) => {
-    const A = AA[i]; let cls = '';
-    if (A.balLabel.includes('TIGHT')) cls = 't'; else if (A.balLabel.includes('LOOSE')) cls = 'l';
-    else if (A.balLabel === 'BALANCED') cls = 'b';
-    h += `<span class="chip ${cls}">${esc(s.name)} · ${A.balLabel || 'no temps'}</span>`
-  });
-  h += `</div><div class="sum-note">Blue = tight, red = loose, green = balanced. Read left to right and you can see whether your changes walked the car toward the window as the track changed.</div></div>`;
-
-  /* 3 — Size & Stagger detail, per session, absolute. Every corner's tire size
+  /* 2 — Size & Stagger detail, per session, absolute. Every corner's tire size
      and each axle's stagger, cold → hot, one row per run — the numbers the crew
      set the car on, not a day average that buries the run-to-run story. */
   h += `<div class="sum-sec"><h3>Size &amp; Stagger Detail</h3><div class="tblscroll"><table class="sumtbl">
@@ -57,7 +45,7 @@ export function summaryHTML(d) {
   });
   h += `</table></div><div class="sum-note">Each cell is cold → hot, in inches. Stagger is the right-side size minus the left on that axle. Set your cold stagger so the HOT number lands on your target for the Main — that’s the one the car actually races on.</div></div>`;
 
-  /* 4 — Pressure gain by session (hot − cold). */
+  /* 3 — Pressure gain by session (hot − cold). */
   h += `<div class="sum-sec"><h3>Pressure Gain by Session</h3><div class="tblscroll"><table class="sumtbl">
     <tr><th>Session</th>${cornerHead}</tr>`;
   S.forEach((s, i) => {
@@ -65,7 +53,7 @@ export function summaryHTML(d) {
   });
   h += `</table></div><div class="sum-note">Hot minus cold, in psi. Typical asphalt build is roughly 3–7. A number above the pack is an overworked corner; near zero isn’t coming up to temp; below zero is a leak.</div></div>`;
 
-  /* 5 — Day averages by corner: temps and pressures collapsed to one number per
+  /* 4 — Day averages by corner: temps and pressures collapsed to one number per
      corner for the whole day, the quick "where did the car live" read. */
   h += `<div class="sum-sec"><h3>Day Averages by Corner</h3><div class="tblscroll"><table class="sumtbl">
     <tr><th>Tire</th><th>Avg Hot Temp</th><th>Avg Cold psi</th><th>Avg Hot psi</th><th>Avg Gain</th><th>Avg Size Growth</th></tr>`;
@@ -83,7 +71,7 @@ export function summaryHTML(d) {
   });
   h += `</table></div><div class="sum-note">Gain and growth are hot minus cold, averaged across every session with both readings.</div></div>`;
 
-  /* 6 — Average temps by session — each session's average temp on each corner. */
+  /* 5 — Average temps by session — each session's average temp on each corner. */
   h += `<div class="sum-sec"><h3>Average Temps by Session</h3><div class="tblscroll"><table class="sumtbl">
     <tr><th>Session</th>${cornerHead}</tr>`;
   S.forEach((s, i) => {
@@ -93,7 +81,7 @@ export function summaryHTML(d) {
   });
   h += `</table></div><div class="sum-note">Hotter tires are the ones doing the work. Read a corner down the day and you can see which one is carrying the car as the track changes.</div></div>`;
 
-  /* 7 — Driver notes of the day, each against what was turned before that run —
+  /* 6 — Driver notes of the day, each against what was turned before that run —
      a note about the car being free means nothing without the change that
      preceded it. */
   const noted = S.filter(s => (s.notes || '').trim() || (s.pre.changes || '').trim());
@@ -108,6 +96,18 @@ export function summaryHTML(d) {
     });
     h += `<div class="sum-note">What was turned, then what the driver felt, next to what the tires measured. When the note and the temps disagree, believe the tires and ask again.</div></div>`;
   }
+
+  /* 7 — How the day went closes the page: the whole day's balance, left to right,
+     after all the numbers that explain it. */
+  h += `<div class="sum-sec"><h3>How the Day Went</h3>
+    <div class="chips">`;
+  S.forEach((s, i) => {
+    const A = AA[i]; let cls = '';
+    if (A.balLabel.includes('TIGHT')) cls = 't'; else if (A.balLabel.includes('LOOSE')) cls = 'l';
+    else if (A.balLabel === 'BALANCED') cls = 'b';
+    h += `<span class="chip ${cls}">${esc(s.name)} · ${A.balLabel || 'no temps'}</span>`
+  });
+  h += `</div><div class="sum-note">Blue = tight, red = loose, green = balanced. Read left to right and you can see whether your changes walked the car toward the window as the track changed.</div></div>`;
 
   return wrap(h);
 }
