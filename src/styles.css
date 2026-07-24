@@ -223,11 +223,14 @@ button.hdr-block:hover .hb-v{color:#fff}
 .dd-fld input[type=date]{font-family:var(--pc-mono)}
 
 /* ---------- RACE DAY BOARD ----------
-   A responsive grid, not a horizontal strip: session cards fill the page width and
-   wrap onto new rows, so a whole night is one vertical scroll with no left/right
-   scrollbar. On a phone the min() collapses every card to a single full-width column. */
-.pc-board{display:grid;gap:14px;align-items:start;padding:4px 2px 18px;margin:0 -2px;
-  grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))}
+   A responsive grid, not a horizontal strip: session cards wrap onto new rows so a
+   whole night is one vertical scroll with no left/right scrollbar. Capped at three
+   per row by explicit breakpoints — one column on a phone, two on a tablet, three
+   on a wide screen and never more, so the cards stay wide enough to read. */
+.pc-board{display:grid;gap:22px;align-items:start;padding:6px 2px 20px;margin:0 -2px;
+  grid-template-columns:1fr}
+@media(min-width:720px){.pc-board{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1120px){.pc-board{grid-template-columns:repeat(3,1fr)}}
 .pc-card,.sess{min-width:0}
 .pc-card>*+*,.sess>*+*{border-top:1px solid var(--pc-rule)}
 
@@ -255,22 +258,22 @@ button.hdr-block:hover .hb-v{color:#fff}
 .pc-ctx .pc-fld+.pc-fld{border-left:1px solid var(--pc-rule)}
 
 /* shared small field (context / tire life) */
-.pc-fld{padding:9px 12px;background:var(--pc-panel)}
-.pc-fld label{display:block;font-family:var(--pc-mono);font-weight:600;font-size:.52rem;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--pc-muted);margin-bottom:4px}
+.pc-fld{padding:12px 14px;background:var(--pc-panel)}
+.pc-fld label{display:block;font-family:var(--pc-mono);font-weight:600;font-size:.58rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--pc-muted);margin-bottom:6px}
 .pc-fld input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--pc-rule);
-  font-family:var(--pc-oswald);font-weight:700;font-size:1rem;letter-spacing:.02em;padding:5px 2px}
+  font-family:var(--pc-oswald);font-weight:700;font-size:1.15rem;letter-spacing:.02em;padding:6px 2px}
 .pc-fld input:focus-visible{outline:none;border-bottom:2px solid var(--pc-orange)}
 
 /* band 4 — tire life (full width) */
-.pc-life input{font-family:var(--pc-mono);font-weight:600;font-size:.9rem;text-transform:none}
+.pc-life input{font-family:var(--pc-mono);font-weight:600;font-size:1rem;text-transform:none}
 
 /* band 5 — changes made */
-.pc-changes{background:var(--pc-hot-fill);padding:10px 12px}
-.pc-changes label{display:block;font-family:var(--pc-mono);font-weight:700;font-size:.55rem;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--pc-orange-dk);margin-bottom:5px}
-.pc-changes textarea{width:100%;background:transparent;border:none;resize:vertical;line-height:1.45;
-  min-height:46px;font-family:var(--pc-archivo);font-weight:500}
+.pc-changes{background:var(--pc-hot-fill);padding:13px 14px}
+.pc-changes label{display:block;font-family:var(--pc-mono);font-weight:700;font-size:.6rem;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--pc-orange-dk);margin-bottom:6px}
+.pc-changes textarea{width:100%;background:transparent;border:none;resize:vertical;line-height:1.5;
+  min-height:52px;font-family:var(--pc-archivo);font-weight:500;font-size:.95rem}
 .pc-changes textarea:focus-visible{outline:none}
 
 /* band 6 — smart fill */
@@ -329,35 +332,35 @@ button.hdr-block:hover .hb-v{color:#fff}
 
 /* band 7 — tire grid */
 .pc-tiregrid{width:100%;border-collapse:collapse;background:var(--pc-panel)}
-.pc-tiregrid th{font-family:var(--pc-archivo);font-weight:900;font-size:.52rem;letter-spacing:.08em;
-  text-transform:uppercase;padding:5px 2px;text-align:center}
+.pc-tiregrid th{font-family:var(--pc-archivo);font-weight:900;font-size:.58rem;letter-spacing:.08em;
+  text-transform:uppercase;padding:6px 2px;text-align:center}
 .pc-tiregrid thead tr.grp th{border-bottom:2px solid var(--pc-ink)}
 .pc-tiregrid thead tr.grp .g-cold{color:var(--pc-blue)}
 .pc-tiregrid thead tr.grp .g-hot{color:var(--pc-orange-dk)}
 .pc-tiregrid thead tr.sub th{border-bottom:2px solid var(--pc-ink);color:var(--pc-muted);
-  font-family:var(--pc-mono);font-weight:700;font-size:.48rem;letter-spacing:.06em;padding:4px 2px}
+  font-family:var(--pc-mono);font-weight:700;font-size:.54rem;letter-spacing:.06em;padding:5px 2px}
 .pc-tiregrid td{padding:0;border-bottom:1px solid var(--pc-rule);vertical-align:middle}
 .pc-tiregrid tr:last-child td{border-bottom:none}
-.pc-corner{font-family:var(--pc-oswald);font-weight:700;font-size:.9rem;letter-spacing:.02em;
-  text-align:center;color:var(--pc-ink);padding:6px 2px}
-.pc-tiregrid input{width:100%;border:1px solid var(--pc-rule);padding:8px 2px;min-height:40px;
+.pc-corner{font-family:var(--pc-oswald);font-weight:700;font-size:1.05rem;letter-spacing:.02em;
+  text-align:center;color:var(--pc-ink);padding:8px 2px}
+.pc-tiregrid input{width:100%;border:1px solid var(--pc-rule);padding:10px 2px;min-height:44px;
   text-align:center;font-family:var(--pc-mono);font-weight:600;background:var(--pc-field)}
 .pc-tiregrid td.cold input{background:var(--pc-field);border-color:var(--pc-rule)}
 .pc-tiregrid td.hot input{background:var(--pc-hot-fill);border-color:var(--pc-hot-border)}
 .pc-temps3{display:grid;grid-template-columns:repeat(3,1fr)}
 .pc-temps3 .t3{display:flex;flex-direction:column;min-width:0}
-.pc-temps3 .t3 label{font-family:var(--pc-mono);font-weight:600;font-size:.42rem;letter-spacing:.02em;
-  text-transform:uppercase;text-align:center;color:var(--pc-orange-dk);padding:3px 0 1px}
+.pc-temps3 .t3 label{font-family:var(--pc-mono);font-weight:600;font-size:.5rem;letter-spacing:.02em;
+  text-transform:uppercase;text-align:center;color:var(--pc-orange-dk);padding:4px 0 2px}
 .pc-temps3 input{border-left:none;padding-left:1px;padding-right:1px}
 .pc-temps3 .t3:first-child input{border-left:1px solid var(--pc-hot-border)}
 .pc-tiregrid input:focus-visible{outline:2px solid var(--pc-orange);outline-offset:-2px;position:relative;z-index:1}
 
 /* band 8 — driver notes */
-.pc-dnotes{padding:10px 12px;background:var(--pc-panel)}
-.pc-dnotes label{display:block;font-family:var(--pc-mono);font-weight:600;font-size:.52rem;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--pc-muted);margin-bottom:5px}
-.pc-dnotes textarea{width:100%;background:transparent;border:none;resize:vertical;line-height:1.45;
-  min-height:46px;font-family:var(--pc-archivo);font-weight:500}
+.pc-dnotes{padding:13px 14px;background:var(--pc-panel)}
+.pc-dnotes label{display:block;font-family:var(--pc-mono);font-weight:600;font-size:.58rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--pc-muted);margin-bottom:6px}
+.pc-dnotes textarea{width:100%;background:transparent;border:none;resize:vertical;line-height:1.5;
+  min-height:52px;font-family:var(--pc-archivo);font-weight:500;font-size:.95rem}
 .pc-dnotes textarea:focus-visible{outline:none}
 
 /* band 9 — readout toggle */
@@ -368,14 +371,14 @@ button.hdr-block:hover .hb-v{color:#fff}
 
 /* band 10 — readout panel */
 .pc-readout{background:radial-gradient(120% 80% at 50% 0%,#20232A,#111317 70%);
-  color:var(--pc-desk);padding:16px 12px 12px}
+  color:var(--pc-desk);padding:20px 14px 16px}
 .pc-readout[hidden]{display:none}
 .pc-car{text-align:center}
-.pc-car svg{width:100%;max-width:236px}
-.pc-legend{display:flex;justify-content:center;gap:12px;margin-top:8px;
-  font-family:var(--pc-mono);font-weight:600;font-size:.5rem;letter-spacing:.08em;
+.pc-car svg{width:100%;max-width:320px}
+.pc-legend{display:flex;justify-content:center;gap:14px;margin-top:12px;
+  font-family:var(--pc-mono);font-weight:600;font-size:.58rem;letter-spacing:.08em;
   text-transform:uppercase;color:var(--pc-muted-2)}
-.pc-legend i{display:inline-block;width:8px;height:8px;margin-right:4px;vertical-align:0}
+.pc-legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
 .pc-readout .empty-anal{color:#B7BCC4}
 
 /* band 11 — footer */
@@ -394,28 +397,30 @@ button.hdr-block:hover .hb-v{color:#fff}
 .pc-addcol button{width:100%}
 
 /* ---------- SUMMARY (ledger panels) ---------- */
-.sum-wrap{max-width:980px;margin:0 auto}
-.hub-hd.sum-head h1{font-style:italic;font-size:1.7rem}
+.sum-wrap{max-width:1040px;margin:0 auto}
+.hub-hd.sum-head h1{font-style:italic;font-size:1.8rem}
 .sum-sec{background:var(--pc-panel-alt);border:2px solid var(--pc-ink);
-  box-shadow:4px 4px 0 rgba(23,24,26,.15);margin-bottom:18px;padding:0 14px 14px}
-.sum-sec>h3{font-family:var(--pc-archivo);font-weight:900;font-size:.72rem;letter-spacing:.18em;
+  box-shadow:4px 4px 0 rgba(23,24,26,.15);margin-bottom:22px;padding:0 18px 18px}
+.sum-sec>h3{font-family:var(--pc-archivo);font-weight:900;font-size:.82rem;letter-spacing:.18em;
   text-transform:uppercase;color:var(--pc-ink);background:var(--pc-panel-head);
-  margin:0 -14px 14px;padding:10px 14px;border-bottom:2px solid var(--pc-ink)}
-.sum-note{font-size:.76rem;color:var(--pc-muted);line-height:1.5;margin-top:10px}
+  margin:0 -18px 16px;padding:13px 18px;border-bottom:2px solid var(--pc-ink)}
+.sum-note{font-size:.82rem;color:var(--pc-muted);line-height:1.55;margin-top:12px}
 .tblscroll{overflow-x:auto}
-.tblscroll+.tblscroll{margin-top:14px}
-table.sumtbl{width:100%;border-collapse:collapse;font-size:.8rem}
+.tblscroll+.tblscroll{margin-top:16px}
+table.sumtbl{width:100%;border-collapse:collapse;font-size:.86rem}
 table.sumtbl th{font-family:var(--pc-mono);font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  font-size:.58rem;color:var(--pc-muted);text-align:left;padding:6px 8px;border-bottom:1.5px solid var(--pc-ink)}
-table.sumtbl td{padding:7px 8px;border-bottom:1px solid var(--pc-rule-2);font-family:var(--pc-mono);font-size:.78rem}
+  font-size:.62rem;color:var(--pc-muted);text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--pc-ink)}
+table.sumtbl td{padding:9px 10px;border-bottom:1px solid var(--pc-rule-2);font-family:var(--pc-mono);font-size:.84rem;white-space:nowrap}
 table.sumtbl td:first-child,table.sumtbl th:first-child{font-family:var(--pc-oswald);font-weight:600;
   letter-spacing:.02em;text-transform:uppercase}
 table.sumtbl tr:last-child td{border-bottom:none}
+.cell-arrow{color:var(--pc-muted-2)}
 .pos{color:var(--pc-green)}.neg{color:var(--pc-red-2)}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.sum-sec .chips .chip{font-size:.7rem;padding:7px 11px}
 
 .notecard{background:#fff;border:2px solid var(--pc-ink);border-left:6px solid var(--pc-orange);
-  padding:10px 12px;margin-bottom:8px;font-size:.84rem;line-height:1.45}
+  padding:12px 14px;margin-bottom:10px;font-size:.9rem;line-height:1.5}
 .notecard b{font-family:var(--pc-oswald);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
 .notecard .nc-chg{display:block;color:var(--pc-orange-dk);font-family:var(--pc-mono);font-size:.7rem;margin:3px 0 4px}
 

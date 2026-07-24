@@ -95,12 +95,21 @@ describe('a race day, start to finish', () => {
     expect(anal).toContain('REAR STAGGER HOT');
     expect(anal).not.toContain('psi (hot)');   // metric tiles moved off the card
 
-    // the calls & flags live in the Day Summary now, so nothing is lost
+    // the calls-and-flags list has been retired from the Day Summary, but the
+    // analysis engine still reads the car — verify the tight call and the leak
+    // straight off the recommendations it produces.
+    const { findS } = await import('../src/state.js');
+    const { analyze } = await import('../src/analyze.js');
+    const recs = analyze(findS(sid), S.state.days[0]).recs;
+    const titles = recs.map(r => r.title);
+    expect(titles).toContain('Car is tight (push)');
+    expect(titles).toContain('RF LOST pressure');
+    expect(recs.find(r => r.title === 'RF LOST pressure').body)
+      .toContain('valve stem, bead seal, or puncture');
+
+    // and the summary no longer carries that section
     window.go({ page: 'summary', dayId: S.state.days[0].id });
-    const sum = app().innerHTML;
-    expect(sum).toContain('Car is tight (push)');
-    expect(sum).toContain('RF LOST pressure');
-    expect(sum).toContain('valve stem, bead seal, or puncture');
+    expect(app().innerHTML).not.toContain('Every Call');
   });
 
   it('keeps input focus while entering readings', () => {
@@ -151,14 +160,21 @@ describe('summary and export', () => {
 
     const html = app().innerHTML;
     ['How the Day Went', 'Average Temps by Session', 'Pressure Gain by Session',
-      'Rear Stagger', 'Size &amp; Stagger Detail', 'Day Averages by Corner',
-      'Driver Notes', 'Every Call &amp; Flag Raised Today']
+      'Size &amp; Stagger Detail', 'Day Averages by Corner', 'Driver Notes']
       .forEach(section => expect(html).toContain(section));
     expect(html).toContain('class="sumtbl"');  // the summary is table-driven now
     expect(html).not.toContain('Track Temp Through the Day');  // track temp dropped
-    // size & stagger detail leads, day averages second, ahead of the per-session tables
-    expect(html.indexOf('Size &amp; Stagger Detail')).toBeLessThan(html.indexOf('Day Averages by Corner'));
-    expect(html.indexOf('Day Averages by Corner')).toBeLessThan(html.indexOf('How the Day Went'));
+    expect(html).not.toContain('Cold vs Hot');                 // rear stagger cold-vs-hot section dropped
+    expect(html).not.toContain('Every Call');                  // flags list dropped
+    // front and rear stagger now live per-session in the size & stagger table
+    expect(html).toContain('Front Stagger');
+    expect(html).toContain('Rear Stagger');
+    // How the day went sits right under the notes, then size & stagger detail, then
+    // the per-session number tables, with day averages after the pressure gains.
+    expect(html.indexOf('How the Day Went')).toBeLessThan(html.indexOf('Size &amp; Stagger Detail'));
+    expect(html.indexOf('Size &amp; Stagger Detail')).toBeLessThan(html.indexOf('Pressure Gain by Session'));
+    expect(html.indexOf('Pressure Gain by Session')).toBeLessThan(html.indexOf('Day Averages by Corner'));
+    expect(html.indexOf('Day Averages by Corner')).toBeLessThan(html.indexOf('Average Temps by Session'));
     expect(html).toContain('Free on entry.');  // driver notes carried through
   });
 

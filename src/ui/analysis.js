@@ -27,11 +27,11 @@ export function readoutHTML(s, d) {
   const cornerBlock = (k, x, y) => {
     const t = A.temps[k], g = A.gains[k];
     return `<g>
-      <rect x="${x}" y="${y}" width="52" height="78" rx="7" fill="${hm[k]}" stroke="#0B0C0F" stroke-width="2.5"></rect>
-      <rect x="${x + 4}" y="${y + 4}" width="44" height="70" rx="5" fill="none" stroke="#fff" stroke-width="1" opacity="0.25"></rect>
-      <text x="${x + 26}" y="${y + 22}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="700" font-size="15" fill="#17181A">${k}</text>
-      <text x="${x + 26}" y="${y + 44}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="700" font-size="14" fill="#17181A">${t != null ? Math.round(t) + '°' : '—'}</text>
-      <text x="${x + 26}" y="${y + 63}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="500" font-size="9.5" fill="#17181A">${g != null ? (g > 0 ? '+' : '') + f1(g) + ' psi' : ''}</text>
+      <rect x="${x}" y="${y}" width="52" height="86" rx="7" fill="${hm[k]}" stroke="#0B0C0F" stroke-width="2.5"></rect>
+      <rect x="${x + 4}" y="${y + 4}" width="44" height="78" rx="5" fill="none" stroke="#fff" stroke-width="1" opacity="0.25"></rect>
+      <text x="${x + 26}" y="${y + 24}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="700" font-size="17" fill="#17181A">${k}</text>
+      <text x="${x + 26}" y="${y + 50}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="700" font-size="18" fill="#17181A">${t != null ? Math.round(t) + '°' : '—'}</text>
+      <text x="${x + 26}" y="${y + 72}" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="600" font-size="11" fill="#17181A">${g != null ? (g > 0 ? '+' : '') + f1(g) + ' psi' : ''}</text>
     </g>`;
   };
 
@@ -80,13 +80,13 @@ export function readoutHTML(s, d) {
       <path d="M70 264 V273 M110 264 V273 M144 264 V273" stroke="#6B7484" stroke-width="1.2"></path>
       <!-- tail panel -->
       <path d="M54 278 Q56 288 62 290 L110 293 L158 290 Q164 288 166 278 Z" fill="#E8590C" opacity="0.9"></path>
-      <text x="110" y="72" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="8" fill="#9AA3B2" letter-spacing="1.4">FRONT STAGGER HOT</text>
-      <text x="108" y="234" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="8" fill="#9AA3B2" letter-spacing="1.4">REAR STAGGER HOT</text>
+      <text x="110" y="72" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="9" fill="#B4BCC9" letter-spacing="1.4">FRONT STAGGER HOT</text>
+      <text x="108" y="234" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="9" fill="#B4BCC9" letter-spacing="1.4">REAR STAGGER HOT</text>
       <path d="M32 158 q-13 8 0 16" stroke="#E8590C" stroke-width="2.5" fill="none"></path>
       <path d="M32 158 l-6 2 4 5z" fill="#E8590C"></path>
       <text x="18" y="152" font-family="Oswald" font-weight="700" font-size="7" fill="#E8590C" letter-spacing="1.2">TURN</text>
-      <text x="110" y="92" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="17" fill="#E8E6E1">${stagTxt(A.stagHotFront)}</text>
-      <text x="108" y="254" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="17" fill="#E8E6E1">${stagTxt(A.stagHotRear)}</text>
+      <text x="110" y="93" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="20" fill="#F2F0EB">${stagTxt(A.stagHotFront)}</text>
+      <text x="108" y="255" text-anchor="middle" font-family="Oswald" font-weight="700" font-size="20" fill="#F2F0EB">${stagTxt(A.stagHotRear)}</text>
       ${cornerBlock('LF', 2, 62)}${cornerBlock('RF', 166, 62)}${cornerBlock('LR', 2, 206)}${cornerBlock('RR', 166, 206)}
     </svg>
     <div class="pc-legend">
