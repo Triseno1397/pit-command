@@ -56,20 +56,22 @@ describe('a race day, start to finish', () => {
   it('adds a day, adds a session, and shows the empty analysis prompt', () => {
     window.addDay();
     expect(app().querySelector('.daydetails')).toBeTruthy();
-    expect(document.getElementById('addBar').style.display).toBe('flex');
+    // the add-a-session controls live in the board's last column now
+    expect(app().querySelector('.pc-addcol')).toBeTruthy();
 
     window.addSession('Practice');
     const card = app().querySelector('.sess');
     expect(card).toBeTruthy();
     expect(card.querySelector('.sess-num').textContent).toBe('S1');
     expect(app().innerHTML).toContain('Log the AFTER · HOT readings');
-    // both reading tabs and all four corners are on screen
+    // the cold/hot Smart Fill target and all four corners are on screen
     expect(app().innerHTML).toContain('Before · Cold');
     expect(app().innerHTML).toContain('After · Hot');
     ['LF', 'RF', 'LR', 'RR'].forEach(k => expect(app().innerHTML).toContain(k));
   });
 
-  it('reads a tight car out of fractional temps and psi, and flags a leak', () => {
+  it('reads a tight car out of fractional temps and psi, and flags a leak', async () => {
+    const S = await import('../src/state.js');
     window.addDay(); window.addSession('Practice');
     const sid = app().querySelector('.sess').id.replace('card-', '');
 
@@ -86,25 +88,25 @@ describe('a race day, start to finish', () => {
       window.updT(sid, 'post', k, 'psi', k === 'RF' ? '18' : '25');
     });
 
+    // balance now reads on the card's header chip
+    expect(document.getElementById('chip-' + sid).textContent).toContain('TIGHT');
+    // the readout is the car diagram: hot stagger on the body, no metric tiles
     const anal = document.getElementById('anal-' + sid).innerHTML;
-    expect(anal).toContain('Crew Chief Readout');
-    expect(anal).toContain('TIGHT');
-    expect(anal).toContain('Car is tight (push)');
-    expect(anal).toContain('RF LOST pressure');
-    expect(anal).toContain('valve stem, bead seal, or puncture');
-    // hot pressures fill the metric boxes, the diagram carries hot stagger,
-    // and the diagonal cross split replaced the old right/left box
-    expect(anal).toContain('psi (hot)');
     expect(anal).toContain('REAR STAGGER HOT');
-    expect(anal).toContain('Cross Split');
-    // and the overview strip up top tracked it
-    expect(document.getElementById('overview').innerHTML).toContain('TIGHT');
+    expect(anal).not.toContain('psi (hot)');   // metric tiles moved off the card
+
+    // the calls & flags live in the Day Summary now, so nothing is lost
+    window.go({ page: 'summary', dayId: S.state.days[0].id });
+    const sum = app().innerHTML;
+    expect(sum).toContain('Car is tight (push)');
+    expect(sum).toContain('RF LOST pressure');
+    expect(sum).toContain('valve stem, bead seal, or puncture');
   });
 
   it('keeps input focus while entering readings', () => {
     window.addDay(); window.addSession('Practice');
     const sid = app().querySelector('.sess').id.replace('card-', '');
-    const input = app().querySelector('.tirebox input');
+    const input = app().querySelector('.pc-tiregrid input');
     input.focus();
     expect(document.activeElement).toBe(input);
     window.updT(sid, 'post', 'LF', 'tm', '210');   // triggers a targeted refresh
@@ -144,8 +146,8 @@ describe('summary and export', () => {
     window.updS(sid, 'notes', 'Free on entry.');
     window.updTT(sid, 'post', '118');
 
-    const dayId = app().querySelector('.sum-btn').getAttribute('onclick').match(/dayId:'([^']+)'/)[1];
-    window.go({ page: 'summary', dayId });
+    const S = await import('../src/state.js');
+    window.go({ page: 'summary', dayId: S.state.days[0].id });
 
     const html = app().innerHTML;
     ['How the Day Went', 'Average Temps by Session', 'Pressure Gain by Session',
@@ -606,46 +608,45 @@ describe('Smart Fill error messages', () => {
   });
 });
 
-describe('the cold sheet and the hot sheet ask for different things', () => {
+describe('the cold sheet and the hot sheet on one grid', () => {
   const sess = () => {
     window.addDay(); window.addSession('Practice');
     return app().querySelector('.sess').id.replace('card-', '');
   };
 
-  it('takes no tread temps cold — a cold tire has nothing to say', () => {
-    const sid = sess();
-    expect(app().innerHTML).not.toContain('Tire Temps °F');
-    ['Inside', 'Middle', 'Outside'].forEach(l => expect(app().innerHTML).not.toContain(`<label>${l}</label>`));
-    // pressures and sizes are still taken cold
-    expect(app().innerHTML).toContain('Pressure psi');
-    expect(app().innerHTML).toContain('Size / rollout in');
+  it('shows both sheets, with tread temps only on the hot side', () => {
+    sess();
+    const html = app().innerHTML;
+    expect(html).toContain('Before · Cold');
+    expect(html).toContain('After · Hot');
+    expect(html).toContain('Tire Temps °F');
+    ['Inside', 'Middle', 'Outside'].forEach(l => expect(html).toContain(`<label>${l}</label>`));
 
-    window.setTab(sid, 'post');
-    expect(app().innerHTML).toContain('Tire Temps °F');
-    ['Inside', 'Middle', 'Outside'].forEach(l => expect(app().innerHTML).toContain(`<label>${l}</label>`));
+    // a cold tire has nothing to say — every tread-temp input is bound to 'post'
+    const grid = app().querySelector('.pc-tiregrid');
+    const temps = [...grid.querySelectorAll('input')]
+      .filter(i => /,'(ti|tm|to)'/.test(i.getAttribute('onchange') || ''));
+    expect(temps).toHaveLength(12);
+    expect(temps.every(i => i.getAttribute('onchange').includes("'post'"))).toBe(true);
   });
 
-  it('puts Changes Made above the track temp row, cold only', () => {
-    const sid = sess();
+  it('keeps the run context and Changes Made on every card, context first', () => {
+    sess();
     const html = app().innerHTML;
     expect(html).toContain('Changes Made');
-    expect(html.indexOf('Changes Made')).toBeLessThan(html.indexOf('Track Temp'));
-
-    window.setTab(sid, 'post');
-    expect(app().innerHTML).not.toContain('Changes Made');
+    expect(html).toContain('Track °F');
+    // the run context (Track °F) sits above Changes Made in the new card
+    expect(html.indexOf('Track °F')).toBeLessThan(html.indexOf('Changes Made'));
   });
 
-  it('asks for tire life going out and laps run coming back', () => {
-    const sid = sess();
-    expect(app().innerHTML).toContain('Tire Life');
-    expect(app().innerHTML).not.toContain('Laps Run');
-
-    window.setTab(sid, 'post');
-    expect(app().innerHTML).toContain('Laps Run');
-    expect(app().innerHTML).not.toContain('Tire Life');
+  it('shows tire life going out and laps run coming back together', () => {
+    sess();
+    const html = app().innerHTML;
+    expect(html).toContain('Tire Life');
+    expect(html).toContain('Laps Run');
   });
 
-  it('keeps what was typed into the three new boxes', async () => {
+  it('keeps what was typed into the three run-context boxes', async () => {
     const { findS } = await import('../src/state.js');
     const sid = sess();
     window.updRd(sid, 'pre', 'changes', 'Round of wedge out, 1/2 psi off the RF.');
@@ -656,10 +657,11 @@ describe('the cold sheet and the hot sheet ask for different things', () => {
     expect(s.pre.changes).toContain('Round of wedge out');
     expect(s.pre.tireLife).toBe('2 runs');
     expect(s.post.laps).toBe('18');
-    // and they show up in the readout rather than being write-only
-    const anal = document.getElementById('anal-' + sid).innerHTML;
-    expect(anal).toContain('Laps Run');
-    expect(anal).toContain('Tire Life');
+    // all three have a labelled home on the card
+    const html = app().innerHTML;
+    expect(html).toContain('Changes Made');
+    expect(html).toContain('Tire Life');
+    expect(html).toContain('Laps Run');
   });
 
   it('carries the cold track temp onto the hot sheet by itself', async () => {
@@ -667,19 +669,18 @@ describe('the cold sheet and the hot sheet ask for different things', () => {
     const sid = sess();
     window.updTT(sid, 'pre', '118');
 
+    // one cold reading, carried onto the hot sheet by updTT
     expect(findS(sid).post.trackTemp).toBe('118');
-    window.setTab(sid, 'post');
-    expect(app().querySelector('.tt-row input').value).toBe('118');
 
     // correcting it hot afterwards stays a hot-only edit
     window.updTT(sid, 'post', '121');
     expect(findS(sid).pre.trackTemp).toBe('118');
+    expect(findS(sid).post.trackTemp).toBe('121');
   });
 });
 
 describe('what a race day can hold', () => {
-  const bar = () => document.getElementById('addBar');
-  const btn = label => [...bar().querySelectorAll('button')].find(b => b.textContent.includes(label));
+  const btn = label => [...app().querySelectorAll('.pc-addcol button')].find(b => b.textContent.includes(label));
 
   it('runs practice all afternoon', async () => {
     const S = await import('../src/state.js');
@@ -737,96 +738,71 @@ describe('what a race day can hold', () => {
   });
 });
 
-/* A night runs eight sessions and an open card is most of a screen. Folding is
-   what makes the whole day readable without scrolling past four tire sheets. */
-describe('folding the session cards', () => {
+/* The board keeps every session expanded side by side; what folds now is each
+   card's Crew Chief Readout — the car diagram and heat legend. */
+describe('the session board and the readout fold', () => {
   const cards = () => [...app().querySelectorAll('.sess')];
-  const shut = () => cards().map(c => c.classList.contains('shut'));
-
-  it('opens a day on the run being worked, with the rest folded', async () => {
-    const S = await import('../src/state.js');
-    window.addDay();
-    ['Practice', 'Practice', 'Practice'].forEach(t => window.addSession(t));
-    // arrive at the day fresh, with nothing folded by hand yet
-    S.state.days[0].sessions.forEach(s => { delete S.sessOpen[s.id] });
-    window.go({ page: 'day', dayId: S.state.days[0].id });
-    expect(shut()).toEqual([true, true, false]);
-  });
 
   it('leaves the session header without a type picker', () => {
     window.addDay();
     window.addSession('Practice');
-    expect(app().querySelector('.sess-hd select')).toBeNull();
+    expect(app().querySelector('.pc-card__hd select')).toBeNull();
   });
 
-  it('folds and unfolds a card without disturbing the others', () => {
+  it('opens each run with its readout folded, and toggles it on demand', () => {
+    window.addDay();
+    window.addSession('Practice');
+    const sid = cards()[0].id.replace('card-', '');
+    const panel = () => document.getElementById('anal-' + sid);
+    expect(panel().hidden).toBe(true);                 // folded on arrival
+
+    window.toggleReadout(sid);
+    expect(panel().hidden).toBe(false);
+    expect(document.getElementById('rotoggle-' + sid).textContent).toContain('Hide Crew Chief Readout');
+
+    window.toggleReadout(sid);
+    expect(panel().hidden).toBe(true);
+  });
+
+  it('folds one card\'s readout without disturbing another', () => {
     window.addDay();
     window.addSession('Practice');
     window.addSession('Practice');
-    const [first, second] = cards().map(c => c.id.replace('card-', ''));
+    const [a, b] = cards().map(c => c.id.replace('card-', ''));
 
-    window.toggleSess(first);
-    expect(shut()).toEqual([false, false]);
-    window.toggleSess(second);
-    expect(shut()).toEqual([false, true]);
-    window.toggleSess(first);
-    expect(shut()).toEqual([true, true]);
+    window.toggleReadout(a);
+    expect(document.getElementById('anal-' + a).hidden).toBe(false);
+    expect(document.getElementById('anal-' + b).hidden).toBe(true);
   });
 
-  it('keeps a folded card typeable — the readings are hidden, not thrown away', async () => {
+  it('keeps a card typeable whether its readout is open or shut', async () => {
     const { findS } = await import('../src/state.js');
     window.addDay();
     window.addSession('Practice');
     const sid = cards()[0].id.replace('card-', '');
     window.updT(sid, 'pre', 'RF', 'psi', '24');
-    window.toggleSess(sid);
+    window.toggleReadout(sid);
 
-    expect(cards()[0].classList.contains('shut')).toBe(true);
-    expect(document.getElementById('body-' + sid)).toBeTruthy();
+    expect(document.getElementById('anal-' + sid)).toBeTruthy();
     expect(findS(sid).pre.tires.RF.psi).toBe('24');
   });
+});
 
-  it('says what the folded run did, and keeps saying it as the numbers change', () => {
+/* Day Details folds away behind the Day strip button now, rather than sitting
+   open at the top of every day. */
+describe('folding the Race Day Details', () => {
+  it('starts folded and toggles from the day strip', async () => {
+    const S = await import('../src/state.js');
     window.addDay();
-    window.addSession('Practice');
-    const sid = cards()[0].id.replace('card-', '');
-    window.toggleSess(sid);
-    window.updTT(sid, 'pre', '118');
+    const id = S.state.days[0].id;
+    const panel = () => document.getElementById('daydetails');
+    expect(panel()).toBeTruthy();                 // present in the DOM...
+    expect(panel().hidden).toBe(true);            // ...but folded away
 
-    const glance = document.getElementById('glance-' + sid);
-    expect(glance.textContent).toContain('118');
-  });
-
-  it('shows the whole night at once, and puts it back', () => {
-    window.addDay();
-    ['Practice', 'Practice', 'Qualifying'].forEach(t => window.addSession(t));
-    const tools = () => document.getElementById('sessTools').textContent;
-    expect(tools()).toContain('3 sessions');
-    expect(tools()).toContain('Expand All');
-
-    window.setAllSessions(true);
-    expect(shut()).toEqual([false, false, false]);
-    expect(tools()).toContain('Collapse All');
-
-    window.setAllSessions(false);
-    expect(shut()).toEqual([true, true, true]);
-  });
-
-  it('leaves the fold controls off a day with one session', () => {
-    window.addDay();
-    window.addSession('Practice');
-    expect(document.getElementById('sessTools').textContent.trim()).toBe('');
-  });
-
-  it('opens the run you just added and folds the one you finished', () => {
-    window.addDay();
-    window.addSession('Practice');
-    const first = cards()[0].id.replace('card-', '');
-    window.setAllSessions(true);
-
-    window.addSession('Practice');
-    expect(shut()).toEqual([true, false]);
-    expect(document.getElementById('card-' + first).classList.contains('shut')).toBe(true);
+    window.toggleDetails(id);
+    expect(panel().hidden).toBe(false);
+    window.toggleDetails(id);
+    expect(panel().hidden).toBe(true);
   });
 });
 

@@ -1,42 +1,25 @@
-import { TIRE_NAMES, num, f1 } from '../num.js';
+import { TIRES, TIRE_NAMES } from '../num.js';
 import { analyze } from '../analyze.js';
 import {
-  activeTab, sessOpen, pendingDel, smartBusy, smartMsg, dictDraft,
+  state, activeTab, detailsOpen, readoutOpen, pendingDel, smartBusy, smartMsg, dictDraft,
   SESSION_TYPES, canAddSession, limitReason
 } from '../state.js';
 import { canSmartFill, speechSupported, isListening } from '../smartfill.js';
 import { devKey, needsKey } from '../devkey.js';
-import { analysisHTML } from './analysis.js';
+import { readoutHTML, heatMap } from './analysis.js';
 import { esc } from './esc.js';
 
-function balColor(label) {
-  if (!label) return 'var(--dim)';
-  if (label.includes('TIGHT')) return 'var(--tight)';
-  if (label.includes('LOOSE')) return 'var(--loose)';
-  if (label === 'BALANCED') return 'var(--good)';
-  return 'var(--dim)';
+/* Balance → the card's chip class and the balance-strip marker position. Same
+   mapping and same formula the readout used before — presentation only. */
+export function balClass(label) {
+  if (!label) return '';
+  if (label.includes('TIGHT')) return 't';
+  if (label.includes('LOOSE')) return 'l';
+  if (label === 'BALANCED') return 'b';
+  return '';
 }
-
-export function overviewHTML(d) {
-  let h = '';
-  d.sessions.forEach((s, i) => {
-    const A = analyze(s, d);
-    const tt = num(s.post.trackTemp) ?? num(s.pre.trackTemp);
-    h += `<div class="ov-chip"><div class="t">${i + 1} · ${esc(s.name)}</div>
-      <div class="v">${tt != null ? f1(tt) + '°F track' : 'no track temp'}</div>
-      <div class="bal" style="color:${balColor(A.balLabel)}">${A.balLabel || '—'}</div></div>`;
-  });
-  return h;
-}
-
-/** What a shut card still has to say. Collapsed, a session is one strip in a list
- *  of eight, so it carries the two things that tell the crew which run this was:
- *  how hot the track was and what the car did on it. */
-export function glanceHTML(s, d) {
-  const A = analyze(s, d);
-  const tt = num(s.post.trackTemp) ?? num(s.pre.trackTemp);
-  return `<span class="g-temp">${tt != null ? f1(tt) + '°F' : '—'}</span>
-    <span class="g-bal" style="color:${balColor(A.balLabel)}">${A.balLabel || '—'}</span>`;
+export function balPos(A) {
+  return A.balance == null ? 50 : 50 - A.balance * 45;
 }
 
 const CLASSES = ['Limited Late Model', 'Late Model', 'Super Late Model', 'Crate Late Model',
@@ -67,101 +50,152 @@ export function deleteDayHTML(d) {
     </div>`;
 }
 
-/** Everything that identifies the day: who drove it, what car, where, when.
- *  Kept at the top of the day so a season's worth of entries stays labelled. */
-function dayDetailsHTML(d) {
-  const field = (label, html) => `<div class="dd-fld"><label>${label}</label>${html}</div>`;
-  return `<section class="daydetails">
-    <div class="dd-hd">
-      <span>Race Day Details</span>
+/* The strip below the header: every race day as a quick-switch button (the active
+   one filled, with an orange sub-line), the primary way to start a new one, and
+   the day-level actions. Same actions and labels as before, gathered in one bar. */
+function dayStripHTML(d) {
+  const days = state.days.map(x =>
+    `<button class="ds-day${x.id === d.id ? ' on' : ''}" onclick="go({page:'day',dayId:'${x.id}'})">${esc(x.name) || 'Untitled'}</button>`
+  ).join('');
+  return `<div class="pc-daystrip">
+    ${days}
+    <button class="sum-btn" onclick="addDay()">+ New Race Day</button>
+    <div class="ds-actions">
+      <button class="mini-btn" onclick="toggleDetails('${d.id}')">Day Details</button>
+      <button class="mini-btn" onclick="go({page:'summary',dayId:'${d.id}'})">Day Summary</button>
+      <button class="mini-btn" onclick="exportCSV('${d.id}')">CSV</button>
       <button class="mini-btn danger" onclick="delDay('${d.id}')">Delete Day</button>
-      <button class="sum-btn" onclick="go({page:'summary',dayId:'${d.id}'})">Summary ▸</button>
     </div>
-    <div class="dd-grid">
-      ${field('Event', `<input value="${esc(d.name)}" placeholder="Race Day 1" onchange="updDay('name',this.value)">`)}
-      ${field('Track', `<input value="${esc(d.track)}" placeholder="e.g. Hickory Motor Speedway" onchange="updDay('track',this.value)">`)}
-      ${field('Date', `<input type="date" value="${esc(d.dateISO || '')}" onchange="updDay('dateISO',this.value)">`)}
-      ${field('Driver', `<input value="${esc(d.driver)}" placeholder="Driver name" autocomplete="name" onchange="updDay('driver',this.value)">`)}
-      ${field('Car #', `<input value="${esc(d.car)}" placeholder="e.g. 21" inputmode="numeric" onchange="updDay('car',this.value)">`)}
-      ${field('Class', `<select onchange="updDay('carClass',this.value)">
-        ${CLASSES.map(c => `<option ${d.carClass === c ? 'selected' : ''}>${c}</option>`).join('')}
-      </select>`)}
-    </div>
-    ${field('Day Notes', `<textarea rows="2" placeholder="Weather, track prep, baseline setup, anything worth remembering next year."
-      onchange="updDay('notes',this.value)">${esc(d.notes || '')}</textarea>`)}
-  </section>`;
-}
-
-/* The bar is built per day rather than baked into the shell, because what a day
-   can still take depends on what is already on it: practice runs all afternoon,
-   qualifying happens once, and the night ends in one main or two. A button that
-   would break that is greyed out and says why, rather than silently accepting a
-   fifth "Main" that then skews every day-level average. */
-export function addBarHTML(d) {
-  return SESSION_TYPES.map(t => {
-    const ok = canAddSession(d, t);
-    const main = t === 'Practice' ? ' main' : '';
-    return `<button class="${main.trim()}${ok ? '' : ' off'}" ${ok ? '' : 'disabled'}
-      title="${ok ? '' : esc(limitReason(t))}" onclick="addSession('${t}')">+ ${t}</button>`;
-  }).join('');
-}
-
-/* One line above the cards for the two questions a long day raises: how many runs
-   are on this sheet, and can I see them all at once. Only earns its space once
-   there is more than one session to fold. */
-export function sessToolsHTML(d) {
-  const n = d.sessions.length;
-  if (n < 2) return '';
-  const anyShut = d.sessions.some(s => !sessOpen[s.id]);
-  return `<div class="sess-tools">
-    <span>${n} sessions on this sheet</span>
-    <button class="mini-btn" onclick="setAllSessions(${anyShut})">${anyShut ? 'Expand All' : 'Collapse All'}</button>
   </div>`;
 }
 
+/** Everything that identifies the day: who drove it, what car, where, when.
+ *  Folded away by default now — the Day Details button in the strip reveals it —
+ *  but always in the DOM so a season's worth of entries stays labelled. */
+function dayDetailsHTML(d) {
+  const open = !!detailsOpen[d.id];
+  const field = (label, html) => `<div class="dd-fld"><label>${label}</label>${html}</div>`;
+  return `<section class="daydetails" id="daydetails"${open ? '' : ' hidden'}>
+    <div class="dd-body">
+      <div class="dd-grid">
+        ${field('Event', `<input value="${esc(d.name)}" placeholder="Race Day 1" onchange="updDay('name',this.value)">`)}
+        ${field('Track', `<input value="${esc(d.track)}" placeholder="e.g. Hickory Motor Speedway" onchange="updDay('track',this.value)">`)}
+        ${field('Date', `<input type="date" value="${esc(d.dateISO || '')}" onchange="updDay('dateISO',this.value)">`)}
+        ${field('Driver', `<input value="${esc(d.driver)}" placeholder="Driver name" autocomplete="name" onchange="updDay('driver',this.value)">`)}
+        ${field('Car #', `<input value="${esc(d.car)}" placeholder="e.g. 21" inputmode="numeric" onchange="updDay('car',this.value)">`)}
+        ${field('Class', `<select onchange="updDay('carClass',this.value)">
+          ${CLASSES.map(c => `<option ${d.carClass === c ? 'selected' : ''}>${c}</option>`).join('')}
+        </select>`)}
+      </div>
+      ${field('Day Notes', `<textarea rows="2" placeholder="Weather, track prep, baseline setup, anything worth remembering next year."
+        onchange="updDay('notes',this.value)">${esc(d.notes || '')}</textarea>`)}
+    </div>
+  </section>`;
+}
+
 export function dayHTML(d) {
-  let h = dayDetailsHTML(d);
-  h += `<div class="overview" id="overview">${overviewHTML(d)}</div>`;
+  let h = dayStripHTML(d);
+  h += dayDetailsHTML(d);
   if (!d.sessions.length)
     h += `<div class="zero"><h2>Green track. No data yet.</h2>
       <p>Add your first session below. Log pressures, temps, and tire sizes before and after each run — or snap a photo of your tire sheet and let the console read it.</p></div>`;
-  h += `<div id="sessTools">${sessToolsHTML(d)}</div>`;
-  const last = d.sessions.length - 1;
-  d.sessions.forEach((s, i) => {
-    if (!activeTab[s.id]) activeTab[s.id] = 'pre';
-    // First sight of a card: the run being worked is the last one on the sheet.
-    if (sessOpen[s.id] === undefined) sessOpen[s.id] = i === last;
-    const open = sessOpen[s.id];
-    const tab = activeTab[s.id];
-    h += `<div class="sess${open ? '' : ' shut'}" id="card-${s.id}">
-      <div class="sess-hd" onclick="sessHdTap(event,'${s.id}')">
-        <button class="sess-tog" aria-expanded="${open}" aria-controls="body-${s.id}"
-          aria-label="${open ? 'Collapse' : 'Expand'} ${esc(s.name)}" onclick="toggleSess('${s.id}')"></button>
-        <span class="sess-num">S${i + 1}</span>
-        <input class="sname" value="${esc(s.name)}" onchange="updS('${s.id}','name',this.value)">
-        <span class="sess-glance" id="glance-${s.id}">${glanceHTML(s, d)}</span>
-        <div class="sess-actions">
-          <button class="del-btn" onclick="dupSession('${s.id}')">Duplicate</button>
-          <button class="del-btn${pendingDel === s.id ? ' arm' : ''}" onclick="delSession('${s.id}')">${pendingDel === s.id ? 'Tap again to delete' : 'Remove'}</button>
-        </div>
-      </div>
-      <div class="sess-body" id="body-${s.id}">
-        <div class="rw-tabs">
-          <button class="${tab === 'pre' ? 'on' : ''}" onclick="setTab('${s.id}','pre')">Before · Cold</button>
-          <button class="${tab === 'post' ? 'on' : ''}" onclick="setTab('${s.id}','post')">After · Hot</button>
-        </div>
-        <div class="rw-body">${smartHTML(s, tab)}${readingHTML(s, tab)}${notesHTML(s)}</div>
-        <div class="anal-slot" id="anal-${s.id}">${analysisHTML(s, d)}</div>
-      </div></div>`;
-  });
+  h += `<div class="pc-board">`;
+  d.sessions.forEach((s, i) => { h += cardHTML(s, d, i) });
+  h += addColHTML(d);
+  h += `</div>`;
   return h;
 }
 
-function notesHTML(s) {
-  return `<div class="notes">
-    <label for="notes-${s.id}">Driver Notes</label>
-    <textarea id="notes-${s.id}" placeholder="What the driver said: entry, center, off — and what you changed."
-      onchange="updS('${s.id}','notes',this.value)">${esc(s.notes || '')}</textarea>
+/* One horizontal card per session: header + balance strip, the run's context,
+   what was changed, Smart Fill, the full cold/hot tire grid, driver notes, and a
+   fold-away Crew Chief Readout. */
+function cardHTML(s, d, i) {
+  const A = analyze(s, d);
+  const open = !!readoutOpen[s.id];
+  return `<section class="pc-card sess pc-panel" id="card-${s.id}">
+    <div class="pc-card__hd">
+      <span class="sess-num">S${i + 1}</span>
+      <input class="pc-sname" value="${esc(s.name)}" onchange="updS('${s.id}','name',this.value)">
+      <span class="chip ${balClass(A.balLabel)}" id="chip-${s.id}">${esc(A.balLabel) || '—'}</span>
+    </div>
+    <div class="pc-bstrip"><span class="pc-bmark" id="bmark-${s.id}" style="left:${balPos(A)}%"></span></div>
+    <div class="pc-ctx">
+      <div class="pc-fld"><label>Track °F</label>
+        <input type="text" inputmode="decimal" autocomplete="off" value="${esc(s.pre.trackTemp)}" placeholder="—"
+          onchange="updTT('${s.id}','pre',this.value)"></div>
+      <div class="pc-fld"><label>Laps Run</label>
+        <input type="text" inputmode="numeric" autocomplete="off" value="${esc(s.post.laps || '')}" placeholder="—"
+          onchange="updRd('${s.id}','post','laps',this.value)"></div>
+    </div>
+    <div class="pc-fld pc-life"><label>Tire Life</label>
+      <input type="text" autocomplete="off" value="${esc(s.pre.tireLife || '')}" placeholder="e.g. 2 runs"
+        onchange="updRd('${s.id}','pre','tireLife',this.value)"></div>
+    <div class="pc-changes">
+      <label for="chg-${s.id}">Changes Made</label>
+      <textarea id="chg-${s.id}" rows="2" placeholder="What was turned since the last run: air, wedge, track bar, springs, stagger, tires."
+        onchange="updRd('${s.id}','pre','changes',this.value)">${esc(s.pre.changes || '')}</textarea>
+    </div>
+    ${smartHTML(s, activeTab[s.id] || 'pre')}
+    ${tireGridHTML(s, heatMap(A))}
+    <div class="pc-dnotes">
+      <label for="notes-${s.id}">Driver Notes</label>
+      <textarea id="notes-${s.id}" rows="2" placeholder="What the driver said: entry, center, off — and what you changed."
+        onchange="updS('${s.id}','notes',this.value)">${esc(s.notes || '')}</textarea>
+    </div>
+    <button class="pc-rotoggle${open ? ' open' : ''}" id="rotoggle-${s.id}" onclick="toggleReadout('${s.id}')">${open ? '▲ Hide Crew Chief Readout' : '▼ Crew Chief Readout'}</button>
+    <div class="pc-readout" id="anal-${s.id}"${open ? '' : ' hidden'}>${readoutHTML(s, d)}</div>
+    <div class="pc-cardft">
+      <button onclick="dupSession('${s.id}')">Duplicate</button>
+      <button class="rm${pendingDel === s.id ? ' arm' : ''}" onclick="delSession('${s.id}')">${pendingDel === s.id ? 'Tap again to delete' : 'Remove'}</button>
+    </div>
+  </section>`;
+}
+
+/* The whole cold/hot sheet for one session as a single grid: corner, cold psi,
+   cold size, hot psi, hot size, and the 3-point hot temps. Cold cells are white,
+   hot cells carry the warm fill. Every input keeps the field name and handler it
+   had when it lived on a tab. */
+function tireGridHTML(s, hm) {
+  const row = k => {
+    const cold = s.pre.tires[k], hot = s.post.tires[k];
+    const temp = (f, lab) => `<div class="t3"><label>${lab}</label>
+      <input type="text" inputmode="decimal" autocomplete="off" value="${esc(hot[f])}" placeholder="—"
+        onchange="updT('${s.id}','post','${k}','${f}',this.value)"></div>`;
+    return `<tr>
+      <td class="pc-corner" title="${esc(TIRE_NAMES[k])}" style="background:${hm[k]}">${k}</td>
+      <td class="cold"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(cold.psi)}" placeholder="—"
+        onchange="updT('${s.id}','pre','${k}','psi',this.value)"></td>
+      <td class="cold"><input type="text" autocomplete="off" value="${esc(cold.size)}" placeholder="88 1/4"
+        onchange="updT('${s.id}','pre','${k}','size',this.value)"></td>
+      <td class="hot"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(hot.psi)}" placeholder="—"
+        onchange="updT('${s.id}','post','${k}','psi',this.value)"></td>
+      <td class="hot"><input type="text" autocomplete="off" value="${esc(hot.size)}" placeholder="88 1/4"
+        onchange="updT('${s.id}','post','${k}','size',this.value)"></td>
+      <td class="hot"><div class="pc-temps3">${temp('ti', 'Inside')}${temp('tm', 'Middle')}${temp('to', 'Outside')}</div></td>
+    </tr>`;
+  };
+  return `<table class="pc-tiregrid">
+    <thead>
+      <tr class="grp"><th></th><th class="g-cold" colspan="2">Before · Cold</th><th class="g-hot" colspan="3">After · Hot</th></tr>
+      <tr class="sub"><th style="width:14%"></th><th style="width:14%">psi</th><th style="width:17%">size / rollout</th>
+        <th style="width:14%">psi</th><th style="width:17%">size / rollout</th><th style="width:27%">Tire Temps °F</th></tr>
+    </thead>
+    <tbody>${TIRES.map(row).join('')}</tbody>
+  </table>`;
+}
+
+/* The add-a-session column, last in the board. Same enable/disable rules and the
+   same explanatory title on a type the day has already used up. */
+function addColHTML(d) {
+  const btns = SESSION_TYPES.map(t => {
+    const ok = canAddSession(d, t);
+    const primary = t === 'Practice' ? ' pc-btn--primary' : t === 'Main' ? ' pc-btn--primary pc-btn--ghostwhite' : '';
+    const cls = `pc-btn${primary}${ok ? '' : ' off'}`;
+    return `<button class="${cls}" ${ok ? '' : 'disabled'} title="${ok ? '' : esc(limitReason(t))}" onclick="addSession('${t}')">+ ${t}</button>`;
+  }).join('');
+  return `<div class="pc-addcol">
+    <div class="addcap">Add a session</div>
+    ${btns}
   </div>`;
 }
 
@@ -172,7 +206,6 @@ export function smartHTML(s, tab) {
   const listening = isListening(s.id);
   const draft = dictDraft[s.id] || '';
   const hasText = !!draft.trim();
-  const target = tab === 'pre' ? 'Before · Cold' : 'After · Hot';
 
   const talkBtn = speechSupported()
     ? `<button class="sf-talk${listening ? ' live' : ''}" onclick="toggleDictate('${s.id}')"
@@ -207,7 +240,10 @@ export function smartHTML(s, tab) {
   return `<div class="smart${listening ? ' listening' : ''}">
     <div class="smart-hd">
       <span>Smart Fill</span>
-      <span class="sf-target">→ ${target}</span>
+      <span class="sf-target">→
+        <button class="sf-seg${tab === 'pre' ? ' on' : ''}" onclick="setTab('${s.id}','pre')">Before · Cold</button>
+        <button class="sf-seg${tab === 'post' ? ' on' : ''}" onclick="setTab('${s.id}','post')">After · Hot</button>
+      </span>
       ${online ? '' : '<span class="offline">No signal — manual entry</span>'}
     </div>
 
@@ -240,73 +276,4 @@ export function smartHTML(s, tab) {
       ? `<div class="err">${esc(msg.slice(1))}</div>`
       : `<div class="oknote">${esc(msg)}</div>`) : ''}
   </div>`;
-}
-
-export function readingHTML(s, tab) {
-  const rd = s[tab];
-  /* Tread temps are only ever pyrometered as the car comes off the track — a
-     cold tire has nothing to say. So the cold sheet is pressures and sizes, and
-     the three temp boxes exist on the hot sheet only. */
-  const hot = tab === 'post';
-  const tireBox = k => {
-    const t = rd.tires[k];
-    const temps = hot ? `
-        <div class="tempslab">Tire Temps °F</div>
-        <div class="fields temps3" style="grid-column:1/-1">
-          <div class="fld"><label>Inside</label>
-            <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.ti)}" placeholder="—"
-              onchange="updT('${s.id}','${tab}','${k}','ti',this.value)"></div>
-          <div class="fld"><label>Middle</label>
-            <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.tm)}" placeholder="—"
-              onchange="updT('${s.id}','${tab}','${k}','tm',this.value)"></div>
-          <div class="fld"><label>Outside</label>
-            <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.to)}" placeholder="—"
-              onchange="updT('${s.id}','${tab}','${k}','to',this.value)"></div>
-        </div>` : '';
-    return `
-    <div class="tirebox">
-      <h4>${k}<span>${TIRE_NAMES[k]}</span></h4>
-      <div class="fields">
-        <div class="fld"><label>Pressure psi</label>
-          <input type="text" inputmode="decimal" autocomplete="off" value="${esc(t.psi)}" placeholder="—"
-            onchange="updT('${s.id}','${tab}','${k}','psi',this.value)"></div>
-        <div class="fld"><label>Size / rollout in</label>
-          <input type="text" autocomplete="off" value="${esc(t.size)}" placeholder="e.g. 88 1/4"
-            onchange="updT('${s.id}','${tab}','${k}','size',this.value)"></div>${temps}
-      </div>
-    </div>`
-  };
-
-  /* What was turned since the last run, written down before the run rather than
-     remembered after it. It sits above the readings because it is the reason the
-     next set of numbers looks different from the last set. */
-  const changes = hot ? '' : `
-    <div class="notes changes">
-      <label for="chg-${s.id}">Changes Made</label>
-      <textarea id="chg-${s.id}" placeholder="What was turned since the last run: air, wedge, track bar, springs, stagger, tires."
-        onchange="updRd('${s.id}','pre','changes',this.value)">${esc(rd.changes || '')}</textarea>
-    </div>`;
-
-  /* Tire life belongs to the cold sheet (it is what you rolled out on) and laps
-     run to the hot one (it is what you did). Both sit beside the track temp
-     because all three are the context every reading below has to be read in. */
-  const second = hot
-    ? `<div class="tt-fld"><label>Laps Run</label>
-        <input type="text" inputmode="numeric" autocomplete="off" value="${esc(rd.laps || '')}" placeholder="—"
-          onchange="updRd('${s.id}','post','laps',this.value)"></div>`
-    : `<div class="tt-fld wide"><label>Tire Life</label>
-        <input type="text" autocomplete="off" value="${esc(rd.tireLife || '')}" placeholder="e.g. 2 runs"
-          onchange="updRd('${s.id}','pre','tireLife',this.value)"></div>`;
-
-  return `${changes}
-    <div class="tt-row">
-      <div class="tt-fld"><label>Track Temp °F</label>
-        <input type="text" inputmode="decimal" autocomplete="off" value="${esc(rd.trackTemp)}" placeholder="—"
-          onchange="updTT('${s.id}','${tab}',this.value)"></div>
-      ${second}
-      <span class="hint">${hot
-      ? 'track temp carried over from the cold sheet — laps are what the run actually was'
-      : 'read the track once, cold; it carries straight to the hot sheet'}</span>
-    </div>
-    <div class="tires">${tireBox('LF')}${tireBox('RF')}${tireBox('LR')}${tireBox('RR')}</div>`;
 }

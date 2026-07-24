@@ -1,8 +1,10 @@
 import { state, view, setView, curDay, findS, disarmDelete, saveStatus, onStatus } from './state.js';
+import { analyze } from './analyze.js';
 import { hubHTML } from './ui/hub.js';
-import { dayHTML, overviewHTML, addBarHTML, glanceHTML, sessToolsHTML } from './ui/day.js';
+import { dayHTML, balClass, balPos } from './ui/day.js';
 import { summaryHTML } from './ui/summary.js';
-import { analysisHTML } from './ui/analysis.js';
+import { readoutHTML } from './ui/analysis.js';
+import { crewStatusLine } from './ui/crew.js';
 import { esc } from './ui/esc.js';
 import { stopDictate } from './smartfill.js';
 
@@ -57,6 +59,25 @@ export function startSaveTicker() {
   setInterval(() => { if (!saveStatus().dirty) paintSaveButton() }, 30000);
 }
 
+/* ---------- header status blocks ----------
+   Two stacked-label blocks on the right of the app header: CREW LOG over the live
+   sync line, AUTOSAVE over the save state. Both carry existing copy verbatim. */
+function crewSlotInner() {
+  return `<span class="hb-k">Crew Log</span><span class="hb-v">${esc(crewStatusLine())}</span>`;
+}
+function headerBlocksHTML() {
+  return `<button class="hdr-block" id="crewSlot" onclick="openCrew()">${crewSlotInner()}</button>
+    <div class="hdr-block">
+      <span class="hb-k">Autosave</span>
+      <span id="saveSlot">${saveButtonHTML()}</span>
+    </div>`;
+}
+/** Keep the header's crew line current when sync status changes, without a full render. */
+export function paintCrewSlot() {
+  const slot = document.getElementById('crewSlot');
+  if (slot) slot.innerHTML = crewSlotInner();
+}
+
 /* One button, same label and same place on every screen, for "show me every race
    day again". "All Days" read like a filter — something that widens the list you
    are looking at — when what it actually does is leave this event and go back to
@@ -70,52 +91,46 @@ export function render() {
   const app = document.getElementById('app');
   const meta = document.getElementById('hdrMeta');
   const bar = document.getElementById('addBar');
+  // v5: the add-a-session controls moved into the board's last column, so the
+  // fixed bottom bar is retired. Keep the element hidden for shells that expect it.
+  if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
   if (view.page === 'hub') {
-    bar.style.display = 'none';
-    meta.innerHTML = `<span id="saveSlot">${saveButtonHTML()}</span>`;
+    meta.innerHTML = headerBlocksHTML();
     app.innerHTML = hubHTML();
   }
   else if (view.page === 'day') {
     const d = curDay(); if (!d) { go({ page: 'hub' }); return }
-    bar.style.display = 'flex';
-    bar.innerHTML = addBarHTML(d);
-    meta.innerHTML = `${allDaysBtn}<span id="saveSlot">${saveButtonHTML()}</span>`;
+    meta.innerHTML = `${allDaysBtn}${headerBlocksHTML()}`;
     app.innerHTML = dayHTML(d);
   }
   else if (view.page === 'summary') {
-    bar.style.display = 'none';
     const d = curDay(); if (!d) { go({ page: 'hub' }); return }
     // Two steps back, both spelled out: this event, or the whole season. The
     // event name is clipped so a long one cannot push the save state off-screen.
     const name = (d.name || 'This Day').trim();
     const short = name.length > 16 ? name.slice(0, 15).trimEnd() + '…' : name;
     meta.innerHTML = `<button class="back-btn" onclick="go({page:'day',dayId:'${d.id}'})">← ${esc(short)}</button>
-      ${allDaysBtn}<span id="saveSlot">${saveButtonHTML()}</span>`;
+      ${allDaysBtn}${headerBlocksHTML()}`;
     app.innerHTML = summaryHTML(d);
   }
 }
 
 /** Targeted refresh after a field edit.
  *  A full re-render would tear down the inputs the crew is tabbing through and
- *  drop focus mid-entry — with gloves on, that loses a reading. */
+ *  drop focus mid-entry — with gloves on, that loses a reading. So only the parts
+ *  a reading changes are repainted: the balance chip, the balance-strip marker,
+ *  and the Crew Chief Readout. */
 export function refreshSession(sid) {
   if (view.page !== 'day') { render(); return }
   const d = curDay(); if (!d) return;
-  const s = findS(sid);
+  const s = findS(sid); if (!s) return;
+  const A = analyze(s, d);
+  const chip = document.getElementById('chip-' + sid);
+  if (chip) { chip.className = 'chip ' + balClass(A.balLabel); chip.textContent = A.balLabel || '—'; }
+  const mark = document.getElementById('bmark-' + sid);
+  if (mark) mark.style.left = balPos(A) + '%';
   const slot = document.getElementById('anal-' + sid);
-  if (s && slot) slot.innerHTML = analysisHTML(s, d);
-  // A folded card reads its own summary strip, so that has to move with the numbers
-  const gl = document.getElementById('glance-' + sid);
-  if (s && gl) gl.innerHTML = glanceHTML(s, d);
-  const ov = document.getElementById('overview');
-  if (ov) ov.innerHTML = overviewHTML(d);
-}
-
-/** Expand All ↔ Collapse All, after folding a card by hand. */
-export function paintSessTools() {
-  const el = document.getElementById('sessTools');
-  const d = curDay();
-  if (el && d) el.innerHTML = sessToolsHTML(d);
+  if (slot) slot.innerHTML = readoutHTML(s, d);
 }
 
 /* ---------- modal ---------- */

@@ -1,25 +1,31 @@
 /* Self-hosted display + mono stacks. Bundled, not fetched from a CDN — the app
-   has to render correctly on a phone with no signal. */
-import '@fontsource/barlow-condensed/latin-500.css';
-import '@fontsource/barlow-condensed/latin-600.css';
-import '@fontsource/barlow-condensed/latin-700.css';
-import '@fontsource/barlow-condensed/latin-800.css';
-import '@fontsource/barlow/latin-400.css';
-import '@fontsource/barlow/latin-500.css';
-import '@fontsource/barlow/latin-600.css';
-import '@fontsource/barlow/latin-700.css';
-import '@fontsource/jetbrains-mono/latin-500.css';
-import '@fontsource/jetbrains-mono/latin-700.css';
+   has to render correctly on a phone with no signal. The v5 "Ledger Command"
+   look leans on Oswald (readouts/labels), Archivo (headers/body), and two
+   monospaces (IBM Plex Mono for UI numbers, Space Mono where a wider face reads
+   better). Every weight the CSS asks for is imported here so nothing falls back. */
+import '@fontsource/oswald/latin-400.css';
+import '@fontsource/oswald/latin-500.css';
+import '@fontsource/oswald/latin-600.css';
+import '@fontsource/oswald/latin-700.css';
+import '@fontsource/archivo/latin-500.css';
+import '@fontsource/archivo/latin-600.css';
+import '@fontsource/archivo/latin-700.css';
+import '@fontsource/archivo/latin-900.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-700.css';
+import '@fontsource/space-mono/latin-400.css';
+import '@fontsource/space-mono/latin-700.css';
 import './styles.css';
 
 import {
-  state, activeTab, sessOpen, dictDraft, blankReading,
+  state, activeTab, sessOpen, readoutOpen, detailsOpen, dictDraft, blankReading,
   newDay, newSession, curDay, findS, loadState, queueSave,
   setView, armDelete, disarmDelete, pendingDel, installLifecycleFlush,
   saveNow, restoreSnapshot, pushSnapshot, ensurePersistentStorage, isoToDisplay,
   canAddSession, limitReason
 } from './state.js';
-import { go, render, refreshSession, paintSessTools, toast, startSaveTicker, openModal, closeModal } from './render.js';
+import { go, render, refreshSession, paintCrewSlot, toast, startSaveTicker, openModal, closeModal } from './render.js';
 import { hooks } from './hooks.js';
 import { smartPhoto, smartText, toggleDictate, stopDictate, clearDraft } from './smartfill.js';
 import { exportJSON, importJSON, exportCSV, exportAllCSV } from './exportimport.js';
@@ -93,20 +99,12 @@ function revealCard(selector) {
   }, 50);
 }
 
-/** Adding a run means the last one is done being keyed in. Fold everything else
- *  so the sheet you are filling is the only sheet on screen — Expand All in the
- *  strip above the cards puts the night back in one tap. */
-function openOnly(d, id) {
-  d.sessions.forEach(s => { sessOpen[s.id] = s.id === id });
-}
-
 window.addSession = t => {
   const d = curDay(); if (!d) return;
-  // The bar already greys these out; this is the backstop for a stale screen.
+  // The add column already greys these out; this is the backstop for a stale screen.
   if (!canAddSession(d, t)) { toast(limitReason(t), true); return }
   const s = newSession(t, d);
   d.sessions.push(s);
-  openOnly(d, s.id);
   queueSave(); render();
   revealCard('.sess:last-of-type');
 };
@@ -124,7 +122,6 @@ window.dupSession = id => {
   const at = d.sessions.findIndex(s => s.id === id);
   d.sessions.splice(at + 1, 0, copy);
   activeTab[copy.id] = 'pre';
-  openOnly(d, copy.id);
   queueSave(); render();
   revealCard('#card-' + copy.id);
 };
@@ -134,45 +131,37 @@ window.delSession = id => {
   if (pendingDel === id) {
     disarmDelete();
     d.sessions = d.sessions.filter(s => s.id !== id);
-    delete activeTab[id]; delete dictDraft[id]; delete sessOpen[id];
+    delete activeTab[id]; delete dictDraft[id]; delete sessOpen[id]; delete readoutOpen[id];
     queueSave(); render(); return;
   }
   armDelete(id, render);
 };
 
-/* ---------- folding session cards ----------
-   Toggling is done to the DOM rather than through render(), because a full
-   re-render tears down every input on the page — collapsing card 2 must not cost
-   the half-typed reading in card 5. */
+/* ---------- folding panels ----------
+   Toggled against the DOM rather than through render(), so opening one card's
+   readout never tears down a half-typed reading in another card. */
 
-window.toggleSess = id => {
-  sessOpen[id] = !sessOpen[id];
-  const card = document.getElementById('card-' + id);
-  if (!card) { render(); return }
-  card.classList.toggle('shut', !sessOpen[id]);
-  const tog = card.querySelector('.sess-tog');
-  if (tog) {
-    tog.setAttribute('aria-expanded', String(sessOpen[id]));
-    const name = (findS(id) || {}).name || 'session';
-    tog.setAttribute('aria-label', (sessOpen[id] ? 'Collapse ' : 'Expand ') + name);
-  }
-  paintSessTools();
+/** Show or hide a card's Crew Chief Readout (the car diagram + heat legend). */
+window.toggleReadout = id => {
+  readoutOpen[id] = !readoutOpen[id];
+  const panel = document.getElementById('anal-' + id);
+  const tog = document.getElementById('rotoggle-' + id);
+  if (!panel || !tog) { render(); return }
+  panel.hidden = !readoutOpen[id];
+  tog.classList.toggle('open', !!readoutOpen[id]);
+  tog.textContent = readoutOpen[id] ? '▲ Hide Crew Chief Readout' : '▼ Crew Chief Readout';
 };
 
-/** The whole header strip folds the card — a chevron alone is a small target in
- *  gloves. Anything you can actually operate (the name box, Duplicate, Remove)
- *  keeps its own click. */
-window.sessHdTap = (e, id) => {
-  if (e && e.target && e.target.closest('input,textarea,select,button,a,label')) return;
-  window.toggleSess(id);
+/** Reveal or fold the Race Day Details panel from the day strip. */
+window.toggleDetails = id => {
+  detailsOpen[id] = !detailsOpen[id];
+  const panel = document.getElementById('daydetails');
+  if (!panel) { render(); return }
+  panel.hidden = !detailsOpen[id];
 };
 
-window.setAllSessions = open => {
-  const d = curDay(); if (!d) return;
-  d.sessions.forEach(s => { sessOpen[s.id] = !!open });
-  render();
-};
-
+/* Which sheet — cold or hot — Smart Fill writes into. The tire grid shows both at
+   once, so this only steers dictation, typing, and photo capture. */
 window.setTab = (id, t) => { activeTab[id] = t; render() };
 
 window.updS = (id, f, v) => {
@@ -242,7 +231,7 @@ window.restorePoint = async ts => {
 };
 
 /* ---------- where the log lives ---------- */
-const crewPanel = () => '<div class="modal-hd"><h3>Sharing</h3></div>' + crewHTML();
+const crewPanel = () => '<div class="modal-hd"><h3>Sharing</h3><button class="mini-btn" onclick="closeModal()">Close</button></div>' + crewHTML();
 
 /** Marked so a repaint can find this panel and not, say, the delete confirmation
  *  that happens to be the open modal instead. */
@@ -326,10 +315,10 @@ window.addEventListener('offline', () => { stopDictate(); render() });
      the device's own work does — local-first is the whole contract. */
   await loadCrew();
   startAutoSync();
-  /* Only the crew panel repaints on sync status. A full render here would tear
-     down whatever input the crew is tabbing through and drop focus mid-reading —
-     the same failure the targeted-refresh work exists to prevent. */
-  onSync(repaintCrew);
+  /* Only the crew panel and the header's crew line repaint on sync status. A full
+     render here would tear down whatever input the crew is tabbing through and drop
+     focus mid-reading — the same failure the targeted-refresh work exists to prevent. */
+  onSync(() => { repaintCrew(); paintCrewSlot() });
   if (crew.code) syncNow({ silent: true });
   // Local dev with no API key yet? Offer the one-time Smart Fill setup in the app.
   checkDevKey();

@@ -3,19 +3,23 @@ import { analyze } from '../analyze.js';
 import { cellNum } from './chart.js';
 import { esc } from './esc.js';
 
+/* v5 ledger: the whole readout sits in a centred 980px column of bordered panels.
+   Only the wrapper is new — every section, table, and explainer below is unchanged. */
+const wrap = h => `<div class="sum-wrap">${h}</div>`;
+
 export function summaryHTML(d) {
   const S = d.sessions;
   const AA = S.map(s => analyze(s, d));
   const who = [d.car ? '#' + d.car : '', d.driver].filter(Boolean).join(' ');
   const meta = [esc(d.track) || 'no track', who ? esc(who) : '', esc(d.carClass), esc(d.date), 'full-day readout']
     .filter(Boolean).join(' · ');
-  let h = `<div class="hub-hd"><h1>${esc(d.name)}</h1>
+  let h = `<div class="hub-hd sum-head"><h1>${esc(d.name)}</h1>
     <p>${meta}</p>
     <div class="hub-tools"><button class="mini-btn" onclick="exportCSV('${d.id}')">Export CSV</button></div></div>`;
   if ((d.notes || '').trim()) {
     h += `<div class="sum-sec"><h3>Day Notes</h3><div class="notecard">${esc(d.notes.trim())}</div></div>`;
   }
-  if (!S.length) return h + `<div class="zero"><h2>No sessions logged.</h2><p>Go back and add sessions with data — the summary builds itself.</p></div>`;
+  if (!S.length) return wrap(h + `<div class="zero"><h2>No sessions logged.</h2><p>Go back and add sessions with data — the summary builds itself.</p></div>`);
 
   const avgOf = arr => { const a = arr.filter(v => v != null); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null };
   const inches = v => v == null ? '—' : f2(v) + '"';
@@ -138,5 +142,5 @@ export function summaryHTML(d) {
       <div><b>${esc(r.sess)} — ${esc(r.title)}.</b> ${esc(r.body)}</div></div>`).join('')
     : '<div class="empty-anal">No critical flags or adjustment calls today — clean day.</div>';
   h += `</div>`;
-  return h;
+  return wrap(h);
 }

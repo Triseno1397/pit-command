@@ -31,6 +31,11 @@ export const activeTab = {};
    the crew last left it — not persisted, because "which card was open" is not
    part of the log. */
 export const sessOpen = {};
+/* v5 board: each session card carries a Crew Chief Readout that folds away, and
+   the Race Day Details panel folds too. Both are pure presentation state — which
+   panel a crew last left open is not part of the log — so they live here, unpersisted. */
+export const readoutOpen = {};
+export const detailsOpen = {};
 export const smartBusy = {};
 export const smartMsg = {};
 export const dictDraft = {};
