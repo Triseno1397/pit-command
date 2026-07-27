@@ -394,16 +394,20 @@ button.hdr-block:hover .hb-v{color:#fff}
   border-top:2px solid var(--pc-ink)!important;background:var(--pc-panel-head);color:var(--pc-ink)}
 .pc-rotoggle.open{background:var(--pc-orange);color:#fff}
 
-/* band 10 — readout panel */
-.pc-readout{background:radial-gradient(120% 80% at 50% 0%,#20232A,#111317 70%);
-  color:var(--pc-desk);padding:20px 14px 16px}
+/* band 10 — readout panel (Crew Chief Readout) */
+.pc-readout{background:radial-gradient(110% 90% at 50% 10%,#262A32,#0B0C0F 65%);
+  color:#E8E6E1;padding:18px 12px 12px}
 .pc-readout[hidden]{display:none}
-.pc-car{text-align:center}
-.pc-car svg{width:100%;max-width:320px}
-.pc-legend{display:flex;justify-content:center;gap:14px;margin-top:12px;
-  font-family:var(--pc-mono);font-weight:600;font-size:.58rem;letter-spacing:.08em;
+.ccr-meta{display:flex;justify-content:space-between;gap:12px;margin:0 8px 6px;
+  font-family:var(--pc-mono);font-size:.55rem;letter-spacing:.14em;
   text-transform:uppercase;color:var(--pc-muted-2)}
-.pc-legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+.ccr-meta span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccr-meta span+span{flex:0 0 auto}
+.ccr-svg{width:100%;max-width:560px;display:block;margin:0 auto}
+.ccr-foot{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;
+  margin-top:10px;padding-bottom:4px;
+  font-family:var(--pc-mono);font-size:.55rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--pc-muted-2)}
 .pc-readout .empty-anal{color:#B7BCC4}
 
 /* band 11 — footer */

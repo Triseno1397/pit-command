@@ -92,7 +92,7 @@ describe('a race day, start to finish', () => {
     expect(document.getElementById('chip-' + sid).textContent).toContain('TIGHT');
     // the readout is the car diagram: hot stagger on the body, no metric tiles
     const anal = document.getElementById('anal-' + sid).innerHTML;
-    expect(anal).toContain('REAR STAGGER HOT');
+    expect(anal).toContain('R-STAG');
     expect(anal).not.toContain('psi (hot)');   // metric tiles moved off the card
 
     // the calls-and-flags list has been retired from the Day Summary, but the
@@ -757,7 +757,7 @@ describe('what a race day can hold', () => {
 });
 
 /* The board keeps every session expanded side by side; what folds now is each
-   card's Crew Chief Readout — the car diagram and heat legend. */
+   card's Crew Chief Readout — the car diagram and its corner plates. */
 describe('the session board and the readout fold', () => {
   const cards = () => [...app().querySelectorAll('.sess')];
 
@@ -836,7 +836,7 @@ describe('the crew chief readout', () => {
     window.updT(sid, 'post', 'RF', 'tm', '210');
 
     const anal = document.getElementById('anal-' + sid).innerHTML;
-    expect(anal).toContain('FRONT STAGGER HOT');
+    expect(anal).toContain('F-STAG');
     expect(anal).toContain('0.75"');
     expect(anal).not.toContain('Track Temp');
   });
